@@ -1,6 +1,6 @@
 import argparse
 import torch
-import librosa
+import torchaudio
 import numpy as np
 from torch import autocast
 from contextlib import nullcontext
@@ -8,6 +8,18 @@ from contextlib import nullcontext
 from models.mn.model import get_model as get_mobilenet, get_ensemble_model
 from models.preprocess import AugmentMelSTFT
 from helpers.utils import NAME_TO_WIDTH, labels
+
+
+def load_audio(audio_path, sample_rate):
+    waveform, original_sample_rate = torchaudio.load(audio_path)
+    if waveform.shape[0] > 1:
+        waveform = waveform.mean(dim=0, keepdim=True)
+    if original_sample_rate != sample_rate:
+        waveform = torchaudio.functional.resample(
+            waveform, orig_freq=original_sample_rate, new_freq=sample_rate
+        )
+    return waveform.float()
+
 
 class EATagger:
     """
@@ -86,8 +98,7 @@ class EATagger:
         """
 
         # load audio file
-        (waveform, _) = librosa.core.load(audio_path, sr=self.sample_rate, mono=True)
-        waveform = torch.from_numpy(waveform[None, :]).to(self.device)
+        waveform = load_audio(audio_path, self.sample_rate).to(self.device)
 
         # analyze the audio file in windows, pad the last window if needed
         window_size = int(window_size * self.sample_rate)

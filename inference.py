@@ -1,6 +1,6 @@
 import argparse
 import torch
-import librosa
+import torchaudio
 import numpy as np
 from torch import autocast
 from contextlib import nullcontext
@@ -10,6 +10,17 @@ from models.dymn.model import get_model as get_dymn
 from models.ensemble import get_ensemble_model
 from models.preprocess import AugmentMelSTFT
 from helpers.utils import NAME_TO_WIDTH, labels
+
+
+def load_audio(audio_path, sample_rate):
+    waveform, original_sample_rate = torchaudio.load(audio_path)
+    if waveform.shape[0] > 1:
+        waveform = waveform.mean(dim=0, keepdim=True)
+    if original_sample_rate != sample_rate:
+        waveform = torchaudio.functional.resample(
+            waveform, orig_freq=original_sample_rate, new_freq=sample_rate
+        )
+    return waveform.float()
 
 
 def audio_tagging(args):
@@ -42,8 +53,7 @@ def audio_tagging(args):
     mel.to(device)
     mel.eval()
 
-    (waveform, _) = librosa.core.load(audio_path, sr=sample_rate, mono=True)
-    waveform = torch.from_numpy(waveform[None, :]).to(device)
+    waveform = load_audio(audio_path, sample_rate).to(device)
 
     # our models are trained in half precision mode (torch.float16)
     # run on cuda with torch.float16 to get the best performance
