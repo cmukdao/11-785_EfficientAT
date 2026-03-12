@@ -15,7 +15,7 @@ from datasets.helpers.audiodatasets import PreprocessDataset, get_roll_func
 # follow the instructions here to get these 3 files:
 # https://github.com/kkoutini/PaSST/tree/main/esc50
 
-dataset_dir = None
+dataset_dir = "datasets/esc50"
 
 assert dataset_dir is not None, "Specify ESC50 dataset location in variable 'dataset_dir'. " \
                                 "Check out the Readme file for further instructions. " \

@@ -1,0 +1,1002 @@
+Warning: FMAX is None setting to 15000
+The number of classes in the loaded state dict (=527) and the current model (=50) is not the same. Dropping final fully-connected layer and loading weights in non-strict mode!
+DyMN(
+  (layers): ModuleList(
+    (0): DY_Block(
+      (exp_conv): DynamicWrapper(
+        (module): Identity()
+      )
+      (exp_norm): Identity()
+      (exp_act): DynamicWrapper(
+        (module): Identity()
+      )
+      (depth_conv): DynamicConv(
+        (residuals): Sequential(
+          (0): Linear(in_features=32, out_features=4, bias=True)
+        )
+      )
+      (depth_norm): BatchNorm2d(16, eps=0.001, momentum=0.01, affine=True, track_running_stats=True)
+      (depth_act): DyReLUB(
+        (coef_net): Sequential(
+          (0): Linear(in_features=32, out_features=64, bias=True)
+        )
+        (sigmoid): Sigmoid()
+      )
+      (ca): CoordAtt()
+      (proj_conv): DynamicConv(
+        (residuals): Sequential(
+          (0): Linear(in_features=32, out_features=4, bias=True)
+        )
+      )
+      (proj_norm): BatchNorm2d(16, eps=0.001, momentum=0.01, affine=True, track_running_stats=True)
+      (context_gen): ContextGen(
+        (joint_conv): Conv2d(16, 32, kernel_size=(1, 1), stride=(1, 1), bias=False)
+        (joint_norm): BatchNorm2d(32, eps=0.001, momentum=0.01, affine=True, track_running_stats=True)
+        (joint_act): Hardswish()
+        (conv_f): Conv2d(32, 16, kernel_size=(1, 1), stride=(1, 1))
+        (conv_t): Conv2d(32, 16, kernel_size=(1, 1), stride=(1, 1))
+        (pool_f): Sequential()
+        (pool_t): Sequential()
+      )
+    )
+    (1): DY_Block(
+      (exp_conv): DynamicConv(
+        (residuals): Sequential(
+          (0): Linear(in_features=32, out_features=4, bias=True)
+        )
+      )
+      (exp_norm): BatchNorm2d(64, eps=0.001, momentum=0.01, affine=True, track_running_stats=True)
+      (exp_act): DynamicWrapper(
+        (module): ReLU(inplace=True)
+      )
+      (depth_conv): DynamicConv(
+        (residuals): Sequential(
+          (0): Linear(in_features=32, out_features=4, bias=True)
+        )
+      )
+      (depth_norm): BatchNorm2d(64, eps=0.001, momentum=0.01, affine=True, track_running_stats=True)
+      (depth_act): DyReLUB(
+        (coef_net): Sequential(
+          (0): Linear(in_features=32, out_features=256, bias=True)
+        )
+        (sigmoid): Sigmoid()
+      )
+      (ca): CoordAtt()
+      (proj_conv): DynamicConv(
+        (residuals): Sequential(
+          (0): Linear(in_features=32, out_features=4, bias=True)
+        )
+      )
+      (proj_norm): BatchNorm2d(24, eps=0.001, momentum=0.01, affine=True, track_running_stats=True)
+      (context_gen): ContextGen(
+        (joint_conv): Conv2d(16, 32, kernel_size=(1, 1), stride=(1, 1), bias=False)
+        (joint_norm): BatchNorm2d(32, eps=0.001, momentum=0.01, affine=True, track_running_stats=True)
+        (joint_act): Hardswish()
+        (conv_f): Conv2d(32, 64, kernel_size=(1, 1), stride=(1, 1))
+        (conv_t): Conv2d(32, 64, kernel_size=(1, 1), stride=(1, 1))
+        (pool_f): AvgPool2d(kernel_size=(3, 1), stride=(2, 1), padding=(1, 0))
+        (pool_t): AvgPool2d(kernel_size=(1, 3), stride=(1, 2), padding=(0, 1))
+      )
+    )
+    (2): DY_Block(
+      (exp_conv): DynamicConv(
+        (residuals): Sequential(
+          (0): Linear(in_features=32, out_features=4, bias=True)
+        )
+      )
+      (exp_norm): BatchNorm2d(72, eps=0.001, momentum=0.01, affine=True, track_running_stats=True)
+      (exp_act): DynamicWrapper(
+        (module): ReLU(inplace=True)
+      )
+      (depth_conv): DynamicConv(
+        (residuals): Sequential(
+          (0): Linear(in_features=32, out_features=4, bias=True)
+        )
+      )
+      (depth_norm): BatchNorm2d(72, eps=0.001, momentum=0.01, affine=True, track_running_stats=True)
+      (depth_act): DyReLUB(
+        (coef_net): Sequential(
+          (0): Linear(in_features=32, out_features=288, bias=True)
+        )
+        (sigmoid): Sigmoid()
+      )
+      (ca): CoordAtt()
+      (proj_conv): DynamicConv(
+        (residuals): Sequential(
+          (0): Linear(in_features=32, out_features=4, bias=True)
+        )
+      )
+      (proj_norm): BatchNorm2d(24, eps=0.001, momentum=0.01, affine=True, track_running_stats=True)
+      (context_gen): ContextGen(
+        (joint_conv): Conv2d(24, 32, kernel_size=(1, 1), stride=(1, 1), bias=False)
+        (joint_norm): BatchNorm2d(32, eps=0.001, momentum=0.01, affine=True, track_running_stats=True)
+        (joint_act): Hardswish()
+        (conv_f): Conv2d(32, 72, kernel_size=(1, 1), stride=(1, 1))
+        (conv_t): Conv2d(32, 72, kernel_size=(1, 1), stride=(1, 1))
+        (pool_f): Sequential()
+        (pool_t): Sequential()
+      )
+    )
+    (3): DY_Block(
+      (exp_conv): DynamicConv(
+        (residuals): Sequential(
+          (0): Linear(in_features=32, out_features=4, bias=True)
+        )
+      )
+      (exp_norm): BatchNorm2d(72, eps=0.001, momentum=0.01, affine=True, track_running_stats=True)
+      (exp_act): DynamicWrapper(
+        (module): ReLU(inplace=True)
+      )
+      (depth_conv): DynamicConv(
+        (residuals): Sequential(
+          (0): Linear(in_features=32, out_features=4, bias=True)
+        )
+      )
+      (depth_norm): BatchNorm2d(72, eps=0.001, momentum=0.01, affine=True, track_running_stats=True)
+      (depth_act): DyReLUB(
+        (coef_net): Sequential(
+          (0): Linear(in_features=32, out_features=288, bias=True)
+        )
+        (sigmoid): Sigmoid()
+      )
+      (ca): CoordAtt()
+      (proj_conv): DynamicConv(
+        (residuals): Sequential(
+          (0): Linear(in_features=32, out_features=4, bias=True)
+        )
+      )
+      (proj_norm): BatchNorm2d(40, eps=0.001, momentum=0.01, affine=True, track_running_stats=True)
+      (context_gen): ContextGen(
+        (joint_conv): Conv2d(24, 32, kernel_size=(1, 1), stride=(1, 1), bias=False)
+        (joint_norm): BatchNorm2d(32, eps=0.001, momentum=0.01, affine=True, track_running_stats=True)
+        (joint_act): Hardswish()
+        (conv_f): Conv2d(32, 72, kernel_size=(1, 1), stride=(1, 1))
+        (conv_t): Conv2d(32, 72, kernel_size=(1, 1), stride=(1, 1))
+        (pool_f): AvgPool2d(kernel_size=(3, 1), stride=(2, 1), padding=(1, 0))
+        (pool_t): AvgPool2d(kernel_size=(1, 3), stride=(1, 2), padding=(0, 1))
+      )
+    )
+    (4-5): 2 x DY_Block(
+      (exp_conv): DynamicConv(
+        (residuals): Sequential(
+          (0): Linear(in_features=32, out_features=4, bias=True)
+        )
+      )
+      (exp_norm): BatchNorm2d(120, eps=0.001, momentum=0.01, affine=True, track_running_stats=True)
+      (exp_act): DynamicWrapper(
+        (module): ReLU(inplace=True)
+      )
+      (depth_conv): DynamicConv(
+        (residuals): Sequential(
+          (0): Linear(in_features=32, out_features=4, bias=True)
+        )
+      )
+      (depth_norm): BatchNorm2d(120, eps=0.001, momentum=0.01, affine=True, track_running_stats=True)
+      (depth_act): DyReLUB(
+        (coef_net): Sequential(
+          (0): Linear(in_features=32, out_features=480, bias=True)
+        )
+        (sigmoid): Sigmoid()
+      )
+      (ca): CoordAtt()
+      (proj_conv): DynamicConv(
+        (residuals): Sequential(
+          (0): Linear(in_features=32, out_features=4, bias=True)
+        )
+      )
+      (proj_norm): BatchNorm2d(40, eps=0.001, momentum=0.01, affine=True, track_running_stats=True)
+      (context_gen): ContextGen(
+        (joint_conv): Conv2d(40, 32, kernel_size=(1, 1), stride=(1, 1), bias=False)
+        (joint_norm): BatchNorm2d(32, eps=0.001, momentum=0.01, affine=True, track_running_stats=True)
+        (joint_act): Hardswish()
+        (conv_f): Conv2d(32, 120, kernel_size=(1, 1), stride=(1, 1))
+        (conv_t): Conv2d(32, 120, kernel_size=(1, 1), stride=(1, 1))
+        (pool_f): Sequential()
+        (pool_t): Sequential()
+      )
+    )
+    (6): DY_Block(
+      (exp_conv): DynamicConv(
+        (residuals): Sequential(
+          (0): Linear(in_features=64, out_features=4, bias=True)
+        )
+      )
+      (exp_norm): BatchNorm2d(240, eps=0.001, momentum=0.01, affine=True, track_running_stats=True)
+      (exp_act): DynamicWrapper(
+        (module): Hardswish()
+      )
+      (depth_conv): DynamicConv(
+        (residuals): Sequential(
+          (0): Linear(in_features=64, out_features=4, bias=True)
+        )
+      )
+      (depth_norm): BatchNorm2d(240, eps=0.001, momentum=0.01, affine=True, track_running_stats=True)
+      (depth_act): DyReLUB(
+        (coef_net): Sequential(
+          (0): Linear(in_features=64, out_features=960, bias=True)
+        )
+        (sigmoid): Sigmoid()
+      )
+      (ca): CoordAtt()
+      (proj_conv): DynamicConv(
+        (residuals): Sequential(
+          (0): Linear(in_features=64, out_features=4, bias=True)
+        )
+      )
+      (proj_norm): BatchNorm2d(80, eps=0.001, momentum=0.01, affine=True, track_running_stats=True)
+      (context_gen): ContextGen(
+        (joint_conv): Conv2d(40, 64, kernel_size=(1, 1), stride=(1, 1), bias=False)
+        (joint_norm): BatchNorm2d(64, eps=0.001, momentum=0.01, affine=True, track_running_stats=True)
+        (joint_act): Hardswish()
+        (conv_f): Conv2d(64, 240, kernel_size=(1, 1), stride=(1, 1))
+        (conv_t): Conv2d(64, 240, kernel_size=(1, 1), stride=(1, 1))
+        (pool_f): AvgPool2d(kernel_size=(3, 1), stride=(2, 1), padding=(1, 0))
+        (pool_t): AvgPool2d(kernel_size=(1, 3), stride=(1, 2), padding=(0, 1))
+      )
+    )
+    (7): DY_Block(
+      (exp_conv): DynamicConv(
+        (residuals): Sequential(
+          (0): Linear(in_features=48, out_features=4, bias=True)
+        )
+      )
+      (exp_norm): BatchNorm2d(200, eps=0.001, momentum=0.01, affine=True, track_running_stats=True)
+      (exp_act): DynamicWrapper(
+        (module): Hardswish()
+      )
+      (depth_conv): DynamicConv(
+        (residuals): Sequential(
+          (0): Linear(in_features=48, out_features=4, bias=True)
+        )
+      )
+      (depth_norm): BatchNorm2d(200, eps=0.001, momentum=0.01, affine=True, track_running_stats=True)
+      (depth_act): DyReLUB(
+        (coef_net): Sequential(
+          (0): Linear(in_features=48, out_features=800, bias=True)
+        )
+        (sigmoid): Sigmoid()
+      )
+      (ca): CoordAtt()
+      (proj_conv): DynamicConv(
+        (residuals): Sequential(
+          (0): Linear(in_features=48, out_features=4, bias=True)
+        )
+      )
+      (proj_norm): BatchNorm2d(80, eps=0.001, momentum=0.01, affine=True, track_running_stats=True)
+      (context_gen): ContextGen(
+        (joint_conv): Conv2d(80, 48, kernel_size=(1, 1), stride=(1, 1), bias=False)
+        (joint_norm): BatchNorm2d(48, eps=0.001, momentum=0.01, affine=True, track_running_stats=True)
+        (joint_act): Hardswish()
+        (conv_f): Conv2d(48, 200, kernel_size=(1, 1), stride=(1, 1))
+        (conv_t): Conv2d(48, 200, kernel_size=(1, 1), stride=(1, 1))
+        (pool_f): Sequential()
+        (pool_t): Sequential()
+      )
+    )
+    (8-9): 2 x DY_Block(
+      (exp_conv): DynamicConv(
+        (residuals): Sequential(
+          (0): Linear(in_features=48, out_features=4, bias=True)
+        )
+      )
+      (exp_norm): BatchNorm2d(184, eps=0.001, momentum=0.01, affine=True, track_running_stats=True)
+      (exp_act): DynamicWrapper(
+        (module): Hardswish()
+      )
+      (depth_conv): DynamicConv(
+        (residuals): Sequential(
+          (0): Linear(in_features=48, out_features=4, bias=True)
+        )
+      )
+      (depth_norm): BatchNorm2d(184, eps=0.001, momentum=0.01, affine=True, track_running_stats=True)
+      (depth_act): DyReLUB(
+        (coef_net): Sequential(
+          (0): Linear(in_features=48, out_features=736, bias=True)
+        )
+        (sigmoid): Sigmoid()
+      )
+      (ca): CoordAtt()
+      (proj_conv): DynamicConv(
+        (residuals): Sequential(
+          (0): Linear(in_features=48, out_features=4, bias=True)
+        )
+      )
+      (proj_norm): BatchNorm2d(80, eps=0.001, momentum=0.01, affine=True, track_running_stats=True)
+      (context_gen): ContextGen(
+        (joint_conv): Conv2d(80, 48, kernel_size=(1, 1), stride=(1, 1), bias=False)
+        (joint_norm): BatchNorm2d(48, eps=0.001, momentum=0.01, affine=True, track_running_stats=True)
+        (joint_act): Hardswish()
+        (conv_f): Conv2d(48, 184, kernel_size=(1, 1), stride=(1, 1))
+        (conv_t): Conv2d(48, 184, kernel_size=(1, 1), stride=(1, 1))
+        (pool_f): Sequential()
+        (pool_t): Sequential()
+      )
+    )
+    (10): DY_Block(
+      (exp_conv): DynamicConv(
+        (residuals): Sequential(
+          (0): Linear(in_features=120, out_features=4, bias=True)
+        )
+      )
+      (exp_norm): BatchNorm2d(480, eps=0.001, momentum=0.01, affine=True, track_running_stats=True)
+      (exp_act): DynamicWrapper(
+        (module): Hardswish()
+      )
+      (depth_conv): DynamicConv(
+        (residuals): Sequential(
+          (0): Linear(in_features=120, out_features=4, bias=True)
+        )
+      )
+      (depth_norm): BatchNorm2d(480, eps=0.001, momentum=0.01, affine=True, track_running_stats=True)
+      (depth_act): DyReLUB(
+        (coef_net): Sequential(
+          (0): Linear(in_features=120, out_features=1920, bias=True)
+        )
+        (sigmoid): Sigmoid()
+      )
+      (ca): CoordAtt()
+      (proj_conv): DynamicConv(
+        (residuals): Sequential(
+          (0): Linear(in_features=120, out_features=4, bias=True)
+        )
+      )
+      (proj_norm): BatchNorm2d(112, eps=0.001, momentum=0.01, affine=True, track_running_stats=True)
+      (context_gen): ContextGen(
+        (joint_conv): Conv2d(80, 120, kernel_size=(1, 1), stride=(1, 1), bias=False)
+        (joint_norm): BatchNorm2d(120, eps=0.001, momentum=0.01, affine=True, track_running_stats=True)
+        (joint_act): Hardswish()
+        (conv_f): Conv2d(120, 480, kernel_size=(1, 1), stride=(1, 1))
+        (conv_t): Conv2d(120, 480, kernel_size=(1, 1), stride=(1, 1))
+        (pool_f): Sequential()
+        (pool_t): Sequential()
+      )
+    )
+    (11): DY_Block(
+      (exp_conv): DynamicConv(
+        (residuals): Sequential(
+          (0): Linear(in_features=128, out_features=4, bias=True)
+        )
+      )
+      (exp_norm): BatchNorm2d(672, eps=0.001, momentum=0.01, affine=True, track_running_stats=True)
+      (exp_act): DynamicWrapper(
+        (module): Hardswish()
+      )
+      (depth_conv): DynamicConv(
+        (residuals): Sequential(
+          (0): Linear(in_features=128, out_features=4, bias=True)
+        )
+      )
+      (depth_norm): BatchNorm2d(672, eps=0.001, momentum=0.01, affine=True, track_running_stats=True)
+      (depth_act): DyReLUB(
+        (coef_net): Sequential(
+          (0): Linear(in_features=128, out_features=2688, bias=True)
+        )
+        (sigmoid): Sigmoid()
+      )
+      (ca): CoordAtt()
+      (proj_conv): DynamicConv(
+        (residuals): Sequential(
+          (0): Linear(in_features=128, out_features=4, bias=True)
+        )
+      )
+      (proj_norm): BatchNorm2d(112, eps=0.001, momentum=0.01, affine=True, track_running_stats=True)
+      (context_gen): ContextGen(
+        (joint_conv): Conv2d(112, 128, kernel_size=(1, 1), stride=(1, 1), bias=False)
+        (joint_norm): BatchNorm2d(128, eps=0.001, momentum=0.01, affine=True, track_running_stats=True)
+        (joint_act): Hardswish()
+        (conv_f): Conv2d(128, 672, kernel_size=(1, 1), stride=(1, 1))
+        (conv_t): Conv2d(128, 672, kernel_size=(1, 1), stride=(1, 1))
+        (pool_f): Sequential()
+        (pool_t): Sequential()
+      )
+    )
+    (12): DY_Block(
+      (exp_conv): DynamicConv(
+        (residuals): Sequential(
+          (0): Linear(in_features=128, out_features=4, bias=True)
+        )
+      )
+      (exp_norm): BatchNorm2d(672, eps=0.001, momentum=0.01, affine=True, track_running_stats=True)
+      (exp_act): DynamicWrapper(
+        (module): Hardswish()
+      )
+      (depth_conv): DynamicConv(
+        (residuals): Sequential(
+          (0): Linear(in_features=128, out_features=4, bias=True)
+        )
+      )
+      (depth_norm): BatchNorm2d(672, eps=0.001, momentum=0.01, affine=True, track_running_stats=True)
+      (depth_act): DyReLUB(
+        (coef_net): Sequential(
+          (0): Linear(in_features=128, out_features=2688, bias=True)
+        )
+        (sigmoid): Sigmoid()
+      )
+      (ca): CoordAtt()
+      (proj_conv): DynamicConv(
+        (residuals): Sequential(
+          (0): Linear(in_features=128, out_features=4, bias=True)
+        )
+      )
+      (proj_norm): BatchNorm2d(160, eps=0.001, momentum=0.01, affine=True, track_running_stats=True)
+      (context_gen): ContextGen(
+        (joint_conv): Conv2d(112, 128, kernel_size=(1, 1), stride=(1, 1), bias=False)
+        (joint_norm): BatchNorm2d(128, eps=0.001, momentum=0.01, affine=True, track_running_stats=True)
+        (joint_act): Hardswish()
+        (conv_f): Conv2d(128, 672, kernel_size=(1, 1), stride=(1, 1))
+        (conv_t): Conv2d(128, 672, kernel_size=(1, 1), stride=(1, 1))
+        (pool_f): AvgPool2d(kernel_size=(3, 1), stride=(2, 1), padding=(1, 0))
+        (pool_t): AvgPool2d(kernel_size=(1, 3), stride=(1, 2), padding=(0, 1))
+      )
+    )
+    (13-14): 2 x DY_Block(
+      (exp_conv): DynamicConv(
+        (residuals): Sequential(
+          (0): Linear(in_features=128, out_features=4, bias=True)
+        )
+      )
+      (exp_norm): BatchNorm2d(960, eps=0.001, momentum=0.01, affine=True, track_running_stats=True)
+      (exp_act): DynamicWrapper(
+        (module): Hardswish()
+      )
+      (depth_conv): DynamicConv(
+        (residuals): Sequential(
+          (0): Linear(in_features=128, out_features=4, bias=True)
+        )
+      )
+      (depth_norm): BatchNorm2d(960, eps=0.001, momentum=0.01, affine=True, track_running_stats=True)
+      (depth_act): DyReLUB(
+        (coef_net): Sequential(
+          (0): Linear(in_features=128, out_features=3840, bias=True)
+        )
+        (sigmoid): Sigmoid()
+      )
+      (ca): CoordAtt()
+      (proj_conv): DynamicConv(
+        (residuals): Sequential(
+          (0): Linear(in_features=128, out_features=4, bias=True)
+        )
+      )
+      (proj_norm): BatchNorm2d(160, eps=0.001, momentum=0.01, affine=True, track_running_stats=True)
+      (context_gen): ContextGen(
+        (joint_conv): Conv2d(160, 128, kernel_size=(1, 1), stride=(1, 1), bias=False)
+        (joint_norm): BatchNorm2d(128, eps=0.001, momentum=0.01, affine=True, track_running_stats=True)
+        (joint_act): Hardswish()
+        (conv_f): Conv2d(128, 960, kernel_size=(1, 1), stride=(1, 1))
+        (conv_t): Conv2d(128, 960, kernel_size=(1, 1), stride=(1, 1))
+        (pool_f): Sequential()
+        (pool_t): Sequential()
+      )
+    )
+  )
+  (in_c): ConvNormActivation(
+    (0): Conv2d(1, 16, kernel_size=(3, 3), stride=(2, 2), padding=(1, 1), bias=False)
+    (1): BatchNorm2d(16, eps=0.001, momentum=0.01, affine=True, track_running_stats=True)
+    (2): Hardswish()
+  )
+  (out_c): ConvNormActivation(
+    (0): Conv2d(160, 960, kernel_size=(1, 1), stride=(1, 1), bias=False)
+    (1): BatchNorm2d(960, eps=0.001, momentum=0.01, affine=True, track_running_stats=True)
+    (2): Hardswish()
+  )
+  (classifier): Sequential(
+    (0): AdaptiveAvgPool2d(output_size=1)
+    (1): Flatten(start_dim=1, end_dim=-1)
+    (2): Linear(in_features=960, out_features=1280, bias=True)
+    (3): Hardswish()
+    (4): Dropout(p=0.2, inplace=True)
+    (5): Linear(in_features=1280, out_features=50, bias=True)
+  )
+)
+Dataset training fold 1 selection out of 2000
+ for training remains 1600
+Mixing up waveforms from dataset of len 1600
+Dataset testing fold 1 selection out of 2000
+ for testing remains 400
+/home/edisondao/.local/share/mamba/envs/11-785_EfficientAT_modern/lib/python3.10/site-packages/torchvision/ops/misc.py:121: UserWarning: Don't use ConvNormActivation directly, please use Conv2dNormActivation and Conv3dNormActivation instead.
+  warnings.warn(
+Epoch 1/80: accuracy: nan, val_loss: nan:   0%|                                                                                                                                                                 | 0/13 [00:00<?, ?it/s]/home/edisondao/.local/share/mamba/envs/11-785_EfficientAT_modern/lib/python3.10/site-packages/torch/functional.py:681: UserWarning: stft with return_complex=False is deprecated. In a future pytorch release, stft will return complex tensors for all inputs, and return_complex=False will raise an error.
+Note: you can still call torch.view_as_real on the complex output to recover the old return format. (Triggered internally at /pytorch/aten/src/ATen/native/SpectralOps.cpp:874.)
+  return _VF.stft(  # type: ignore[attr-defined]
+/home/edisondao/projects/11-785/11-785_EfficientAT/models/preprocess.py:56: FutureWarning: `torch.cuda.amp.autocast(args...)` is deprecated. Please use `torch.amp.autocast('cuda', args...)` instead.
+  with torch.cuda.amp.autocast(enabled=False):
+
+
+
+
+Epoch 1/80: accuracy: nan, val_loss: nan: 100%|████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████| 13/13 [00:13<00:00,  1.03s/it]
+Validating: 100%|████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████| 4/4 [00:01<00:00,  2.01it/s]
+Epoch 2/80: accuracy: 0.0200, val_loss: 3.9185:   0%|                                                                                                                                                           | 0/13 [00:00<?, ?it/s]/home/edisondao/projects/11-785/11-785_EfficientAT/models/preprocess.py:56: FutureWarning: `torch.cuda.amp.autocast(args...)` is deprecated. Please use `torch.amp.autocast('cuda', args...)` instead.
+  with torch.cuda.amp.autocast(enabled=False):
+
+
+
+Epoch 2/80: accuracy: 0.0200, val_loss: 3.9185: 100%|██████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████| 13/13 [00:10<00:00,  1.21it/s]
+Validating: 100%|████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████| 4/4 [00:01<00:00,  2.42it/s]
+Epoch 3/80: accuracy: 0.0225, val_loss: 3.9170:   0%|                                                                                                                                                           | 0/13 [00:00<?, ?it/s]/home/edisondao/projects/11-785/11-785_EfficientAT/models/preprocess.py:56: FutureWarning: `torch.cuda.amp.autocast(args...)` is deprecated. Please use `torch.amp.autocast('cuda', args...)` instead.
+  with torch.cuda.amp.autocast(enabled=False):
+
+
+
+Epoch 3/80: accuracy: 0.0225, val_loss: 3.9170: 100%|██████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████| 13/13 [00:10<00:00,  1.19it/s]
+Validating: 100%|████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████| 4/4 [00:01<00:00,  2.49it/s]
+Epoch 4/80: accuracy: 0.0275, val_loss: 3.9143:   0%|                                                                                                                                                           | 0/13 [00:00<?, ?it/s]/home/edisondao/projects/11-785/11-785_EfficientAT/models/preprocess.py:56: FutureWarning: `torch.cuda.amp.autocast(args...)` is deprecated. Please use `torch.amp.autocast('cuda', args...)` instead.
+  with torch.cuda.amp.autocast(enabled=False):
+
+
+
+
+Epoch 4/80: accuracy: 0.0275, val_loss: 3.9143: 100%|██████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████| 13/13 [00:10<00:00,  1.22it/s]
+Validating: 100%|████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████| 4/4 [00:01<00:00,  2.39it/s]
+Epoch 5/80: accuracy: 0.0350, val_loss: 3.9094:   0%|                                                                                                                                                           | 0/13 [00:00<?, ?it/s]/home/edisondao/projects/11-785/11-785_EfficientAT/models/preprocess.py:56: FutureWarning: `torch.cuda.amp.autocast(args...)` is deprecated. Please use `torch.amp.autocast('cuda', args...)` instead.
+  with torch.cuda.amp.autocast(enabled=False):
+
+
+
+Epoch 5/80: accuracy: 0.0350, val_loss: 3.9094: 100%|██████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████| 13/13 [00:11<00:00,  1.16it/s]
+Validating: 100%|████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████| 4/4 [00:01<00:00,  2.37it/s]
+Epoch 6/80: accuracy: 0.0400, val_loss: 3.9001:   0%|                                                                                                                                                           | 0/13 [00:00<?, ?it/s]/home/edisondao/projects/11-785/11-785_EfficientAT/models/preprocess.py:56: FutureWarning: `torch.cuda.amp.autocast(args...)` is deprecated. Please use `torch.amp.autocast('cuda', args...)` instead.
+  with torch.cuda.amp.autocast(enabled=False):
+
+
+
+Epoch 6/80: accuracy: 0.0400, val_loss: 3.9001: 100%|██████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████| 13/13 [00:10<00:00,  1.27it/s]
+Validating: 100%|████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████| 4/4 [00:01<00:00,  2.62it/s]
+Epoch 7/80: accuracy: 0.0550, val_loss: 3.8843:   0%|                                                                                                                                                           | 0/13 [00:00<?, ?it/s]/home/edisondao/projects/11-785/11-785_EfficientAT/models/preprocess.py:56: FutureWarning: `torch.cuda.amp.autocast(args...)` is deprecated. Please use `torch.amp.autocast('cuda', args...)` instead.
+  with torch.cuda.amp.autocast(enabled=False):
+
+
+
+Epoch 7/80: accuracy: 0.0550, val_loss: 3.8843: 100%|██████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████| 13/13 [00:09<00:00,  1.32it/s]
+Validating: 100%|████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████| 4/4 [00:01<00:00,  2.29it/s]
+Epoch 8/80: accuracy: 0.1075, val_loss: 3.8594:   0%|                                                                                                                                                           | 0/13 [00:00<?, ?it/s]/home/edisondao/projects/11-785/11-785_EfficientAT/models/preprocess.py:56: FutureWarning: `torch.cuda.amp.autocast(args...)` is deprecated. Please use `torch.amp.autocast('cuda', args...)` instead.
+  with torch.cuda.amp.autocast(enabled=False):
+
+
+
+Epoch 8/80: accuracy: 0.1075, val_loss: 3.8594: 100%|██████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████| 13/13 [00:10<00:00,  1.29it/s]
+Validating: 100%|████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████| 4/4 [00:01<00:00,  2.54it/s]
+Epoch 9/80: accuracy: 0.2450, val_loss: 3.8225:   0%|                                                                                                                                                           | 0/13 [00:00<?, ?it/s]/home/edisondao/projects/11-785/11-785_EfficientAT/models/preprocess.py:56: FutureWarning: `torch.cuda.amp.autocast(args...)` is deprecated. Please use `torch.amp.autocast('cuda', args...)` instead.
+  with torch.cuda.amp.autocast(enabled=False):
+
+
+
+Epoch 9/80: accuracy: 0.2450, val_loss: 3.8225: 100%|██████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████| 13/13 [00:10<00:00,  1.27it/s]
+Validating: 100%|████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████| 4/4 [00:01<00:00,  2.35it/s]
+Epoch 10/80: accuracy: 0.4300, val_loss: 3.7689:   0%|                                                                                                                                                          | 0/13 [00:00<?, ?it/s]/home/edisondao/projects/11-785/11-785_EfficientAT/models/preprocess.py:56: FutureWarning: `torch.cuda.amp.autocast(args...)` is deprecated. Please use `torch.amp.autocast('cuda', args...)` instead.
+  with torch.cuda.amp.autocast(enabled=False):
+
+
+
+Epoch 10/80: accuracy: 0.4300, val_loss: 3.7689: 100%|█████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████| 13/13 [00:10<00:00,  1.25it/s]
+Validating: 100%|████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████| 4/4 [00:01<00:00,  2.51it/s]
+Epoch 11/80: accuracy: 0.6200, val_loss: 3.6998:   0%|                                                                                                                                                          | 0/13 [00:00<?, ?it/s]/home/edisondao/projects/11-785/11-785_EfficientAT/models/preprocess.py:56: FutureWarning: `torch.cuda.amp.autocast(args...)` is deprecated. Please use `torch.amp.autocast('cuda', args...)` instead.
+  with torch.cuda.amp.autocast(enabled=False):
+
+
+
+Epoch 11/80: accuracy: 0.6200, val_loss: 3.6998: 100%|█████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████| 13/13 [00:10<00:00,  1.24it/s]
+Validating: 100%|████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████| 4/4 [00:01<00:00,  2.43it/s]
+Epoch 12/80: accuracy: 0.7375, val_loss: 3.6081:   0%|                                                                                                                                                          | 0/13 [00:00<?, ?it/s]/home/edisondao/projects/11-785/11-785_EfficientAT/models/preprocess.py:56: FutureWarning: `torch.cuda.amp.autocast(args...)` is deprecated. Please use `torch.amp.autocast('cuda', args...)` instead.
+  with torch.cuda.amp.autocast(enabled=False):
+
+
+
+Epoch 12/80: accuracy: 0.7375, val_loss: 3.6081: 100%|█████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████| 13/13 [00:09<00:00,  1.32it/s]
+Validating: 100%|████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████| 4/4 [00:01<00:00,  2.63it/s]
+Epoch 13/80: accuracy: 0.8025, val_loss: 3.4931:   0%|                                                                                                                                                          | 0/13 [00:00<?, ?it/s]/home/edisondao/projects/11-785/11-785_EfficientAT/models/preprocess.py:56: FutureWarning: `torch.cuda.amp.autocast(args...)` is deprecated. Please use `torch.amp.autocast('cuda', args...)` instead.
+  with torch.cuda.amp.autocast(enabled=False):
+
+
+
+Epoch 13/80: accuracy: 0.8025, val_loss: 3.4931: 100%|█████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████| 13/13 [00:10<00:00,  1.26it/s]
+Validating: 100%|████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████| 4/4 [00:01<00:00,  2.51it/s]
+Epoch 14/80: accuracy: 0.8275, val_loss: 3.3496:   0%|                                                                                                                                                          | 0/13 [00:00<?, ?it/s]/home/edisondao/projects/11-785/11-785_EfficientAT/models/preprocess.py:56: FutureWarning: `torch.cuda.amp.autocast(args...)` is deprecated. Please use `torch.amp.autocast('cuda', args...)` instead.
+  with torch.cuda.amp.autocast(enabled=False):
+
+
+
+Epoch 14/80: accuracy: 0.8275, val_loss: 3.3496: 100%|█████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████| 13/13 [00:10<00:00,  1.19it/s]
+Validating: 100%|████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████| 4/4 [00:01<00:00,  2.44it/s]
+Epoch 15/80: accuracy: 0.8475, val_loss: 3.1707:   0%|                                                                                                                                                          | 0/13 [00:00<?, ?it/s]/home/edisondao/projects/11-785/11-785_EfficientAT/models/preprocess.py:56: FutureWarning: `torch.cuda.amp.autocast(args...)` is deprecated. Please use `torch.amp.autocast('cuda', args...)` instead.
+  with torch.cuda.amp.autocast(enabled=False):
+
+
+
+
+Epoch 15/80: accuracy: 0.8475, val_loss: 3.1707: 100%|█████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████| 13/13 [00:11<00:00,  1.11it/s]
+Validating: 100%|████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████| 4/4 [00:01<00:00,  2.32it/s]
+Epoch 16/80: accuracy: 0.8700, val_loss: 2.9347:   0%|                                                                                                                                                          | 0/13 [00:00<?, ?it/s]/home/edisondao/projects/11-785/11-785_EfficientAT/models/preprocess.py:56: FutureWarning: `torch.cuda.amp.autocast(args...)` is deprecated. Please use `torch.amp.autocast('cuda', args...)` instead.
+  with torch.cuda.amp.autocast(enabled=False):
+
+
+
+Epoch 16/80: accuracy: 0.8700, val_loss: 2.9347: 100%|█████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████| 13/13 [00:10<00:00,  1.20it/s]
+Validating: 100%|████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████| 4/4 [00:01<00:00,  2.42it/s]
+Epoch 17/80: accuracy: 0.8625, val_loss: 2.6536:   0%|                                                                                                                                                          | 0/13 [00:00<?, ?it/s]/home/edisondao/projects/11-785/11-785_EfficientAT/models/preprocess.py:56: FutureWarning: `torch.cuda.amp.autocast(args...)` is deprecated. Please use `torch.amp.autocast('cuda', args...)` instead.
+  with torch.cuda.amp.autocast(enabled=False):
+
+
+
+
+Epoch 17/80: accuracy: 0.8625, val_loss: 2.6536: 100%|█████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████| 13/13 [00:10<00:00,  1.22it/s]
+Validating: 100%|████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████| 4/4 [00:01<00:00,  2.66it/s]
+Epoch 18/80: accuracy: 0.8700, val_loss: 2.3490:   0%|                                                                                                                                                          | 0/13 [00:00<?, ?it/s]/home/edisondao/projects/11-785/11-785_EfficientAT/models/preprocess.py:56: FutureWarning: `torch.cuda.amp.autocast(args...)` is deprecated. Please use `torch.amp.autocast('cuda', args...)` instead.
+  with torch.cuda.amp.autocast(enabled=False):
+
+
+
+
+Epoch 18/80: accuracy: 0.8700, val_loss: 2.3490: 100%|█████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████| 13/13 [00:10<00:00,  1.26it/s]
+Validating: 100%|████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████| 4/4 [00:01<00:00,  2.62it/s]
+Epoch 19/80: accuracy: 0.8725, val_loss: 2.0489:   0%|                                                                                                                                                          | 0/13 [00:00<?, ?it/s]/home/edisondao/projects/11-785/11-785_EfficientAT/models/preprocess.py:56: FutureWarning: `torch.cuda.amp.autocast(args...)` is deprecated. Please use `torch.amp.autocast('cuda', args...)` instead.
+  with torch.cuda.amp.autocast(enabled=False):
+
+
+
+
+Epoch 19/80: accuracy: 0.8725, val_loss: 2.0489: 100%|█████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████| 13/13 [00:10<00:00,  1.26it/s]
+Validating: 100%|████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████| 4/4 [00:01<00:00,  2.54it/s]
+Epoch 20/80: accuracy: 0.8775, val_loss: 1.7582:   0%|                                                                                                                                                          | 0/13 [00:00<?, ?it/s]/home/edisondao/projects/11-785/11-785_EfficientAT/models/preprocess.py:56: FutureWarning: `torch.cuda.amp.autocast(args...)` is deprecated. Please use `torch.amp.autocast('cuda', args...)` instead.
+  with torch.cuda.amp.autocast(enabled=False):
+
+
+
+Epoch 20/80: accuracy: 0.8775, val_loss: 1.7582: 100%|█████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████| 13/13 [00:09<00:00,  1.36it/s]
+Validating: 100%|████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████| 4/4 [00:01<00:00,  2.76it/s]
+Epoch 21/80: accuracy: 0.8925, val_loss: 1.4904:   0%|                                                                                                                                                          | 0/13 [00:00<?, ?it/s]/home/edisondao/projects/11-785/11-785_EfficientAT/models/preprocess.py:56: FutureWarning: `torch.cuda.amp.autocast(args...)` is deprecated. Please use `torch.amp.autocast('cuda', args...)` instead.
+  with torch.cuda.amp.autocast(enabled=False):
+
+
+
+Epoch 21/80: accuracy: 0.8925, val_loss: 1.4904: 100%|█████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████| 13/13 [00:09<00:00,  1.35it/s]
+Validating: 100%|████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████| 4/4 [00:01<00:00,  2.56it/s]
+Epoch 22/80: accuracy: 0.9000, val_loss: 1.2543:   0%|                                                                                                                                                          | 0/13 [00:00<?, ?it/s]/home/edisondao/projects/11-785/11-785_EfficientAT/models/preprocess.py:56: FutureWarning: `torch.cuda.amp.autocast(args...)` is deprecated. Please use `torch.amp.autocast('cuda', args...)` instead.
+  with torch.cuda.amp.autocast(enabled=False):
+
+
+
+Epoch 22/80: accuracy: 0.9000, val_loss: 1.2543: 100%|█████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████| 13/13 [00:09<00:00,  1.34it/s]
+Validating: 100%|████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████| 4/4 [00:01<00:00,  2.69it/s]
+Epoch 23/80: accuracy: 0.9125, val_loss: 1.0529:   0%|                                                                                                                                                          | 0/13 [00:00<?, ?it/s]/home/edisondao/projects/11-785/11-785_EfficientAT/models/preprocess.py:56: FutureWarning: `torch.cuda.amp.autocast(args...)` is deprecated. Please use `torch.amp.autocast('cuda', args...)` instead.
+  with torch.cuda.amp.autocast(enabled=False):
+
+
+
+Epoch 23/80: accuracy: 0.9125, val_loss: 1.0529: 100%|█████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████| 13/13 [00:09<00:00,  1.39it/s]
+Validating: 100%|████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████| 4/4 [00:01<00:00,  2.67it/s]
+Epoch 24/80: accuracy: 0.9275, val_loss: 0.8947:   0%|                                                                                                                                                          | 0/13 [00:00<?, ?it/s]/home/edisondao/projects/11-785/11-785_EfficientAT/models/preprocess.py:56: FutureWarning: `torch.cuda.amp.autocast(args...)` is deprecated. Please use `torch.amp.autocast('cuda', args...)` instead.
+  with torch.cuda.amp.autocast(enabled=False):
+
+
+
+Epoch 24/80: accuracy: 0.9275, val_loss: 0.8947: 100%|█████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████| 13/13 [00:09<00:00,  1.38it/s]
+Validating: 100%|████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████| 4/4 [00:01<00:00,  2.71it/s]
+Epoch 25/80: accuracy: 0.9300, val_loss: 0.7726:  15%|██████████████████████▍                                                                                                                           | 2/13 [00:02<00:11,  1.06s/it]/home/edisondao/projects/11-785/11-785_EfficientAT/models/preprocess.py:56: FutureWarning: `torch.cuda.amp.autocast(args...)` is deprecated. Please use `torch.amp.autocast('cuda', args...)` instead.
+  with torch.cuda.amp.autocast(enabled=False):
+Epoch 25/80: accuracy: 0.9300, val_loss: 0.7726:  38%|████████████████████████████████████████████████████████▏                                                                                         | 5/13 [00:04<00:06,  1.31it/s]/home/edisondao/projects/11-785/11-785_EfficientAT/models/preprocess.py:56: FutureWarning: `torch.cuda.amp.autocast(args...)` is deprecated. Please use `torch.amp.autocast('cuda', args...)` instead.
+Epoch 25/80: accuracy: 0.9300, val_loss: 0.7726:  62%|█████████████████████████████████████████████████████████████████████████████████████████▊                                                        | 8/13 [00:06<00:03,  1.43it/s]/home/edisondao/projects/11-785/11-785_EfficientAT/models/preprocess.py:56: FutureWarning: `torch.cuda.amp.autocast(args...)` is deprecated. Please use `torch.amp.autocast('cuda', args...)` instead.
+Epoch 25/80: accuracy: 0.9300, val_loss: 0.7726:  77%|███████████████████████████████████████████████████████████████████████████████████████████████████████████████▌                                 | 10/13 [00:07<00:02,  1.40it/s]/home/edisondao/projects/11-785/11-785_EfficientAT/models/preprocess.py:56: FutureWarning: `torch.cuda.amp.autocast(args...)` is deprecated. Please use `torch.amp.autocast('cuda', args...)` instead.
+Epoch 25/80: accuracy: 0.9300, val_loss: 0.7726: 100%|█████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████| 13/13 [00:09<00:00,  1.33it/s]/home/edisondao/projects/11-785/11-785_EfficientAT/models/preprocess.py:56: FutureWarning: `torch.cuda.amp.autocast(args...)` is deprecated. Please use `torch.amp.autocast('cuda', args...)` instead.
+Epoch 26/80: accuracy: 0.9275, val_loss: 0.6828:   0%|                                                                                                                                                          | 0/13 [00:00<?, ?it/s]/home/edisondao/projects/11-785/11-785_EfficientAT/models/preprocess.py:56: FutureWarning: `torch.cuda.amp.autocast(args...)` is deprecated. Please use `torch.amp.autocast('cuda', args...)` instead.
+Epoch 26/80: accuracy: 0.9275, val_loss: 0.6828:  15%|██████████████████████▍                                                                                                                           | 2/13 [00:02<00:11,  1.09s/it]/home/edisondao/projects/11-785/11-785_EfficientAT/models/preprocess.py:56: FutureWarning: `torch.cuda.amp.autocast(args...)` is deprecated. Please use `torch.amp.autocast('cuda', args...)` instead.
+Epoch 26/80: accuracy: 0.9275, val_loss: 0.6828:  38%|████████████████████████████████████████████████████████▏                                                                                         | 5/13 [00:04<00:06,  1.20it/s]/home/edisondao/projects/11-785/11-785_EfficientAT/models/preprocess.py:56: FutureWarning: `torch.cuda.amp.autocast(args...)` is deprecated. Please use `torch.amp.autocast('cuda', args...)` instead.
+Epoch 26/80: accuracy: 0.9275, val_loss: 0.6828:  62%|█████████████████████████████████████████████████████████████████████████████████████████▊                                                        | 8/13 [00:06<00:03,  1.34it/s]/home/edisondao/projects/11-785/11-785_EfficientAT/models/preprocess.py:56: FutureWarning: `torch.cuda.amp.autocast(args...)` is deprecated. Please use `torch.amp.autocast('cuda', args...)` instead.
+Epoch 26/80: accuracy: 0.9275, val_loss: 0.6828:  85%|██████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████▋                      | 11/13 [00:08<00:01,  1.44it/s]/home/edisondao/projects/11-785/11-785_EfficientAT/models/preprocess.py:56: FutureWarning: `torch.cuda.amp.autocast(args...)` is deprecated. Please use `torch.amp.autocast('cuda', args...)` instead.
+Epoch 26/80: accuracy: 0.9275, val_loss: 0.6828: 100%|█████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████| 13/13 [00:09<00:00,  1.31it/s]/home/edisondao/projects/11-785/11-785_EfficientAT/models/preprocess.py:56: FutureWarning: `torch.cuda.amp.autocast(args...)` is deprecated. Please use `torch.amp.autocast('cuda', args...)` instead.
+Epoch 27/80: accuracy: 0.9325, val_loss: 0.6126:   0%|                                                                                                                                                          | 0/13 [00:00<?, ?it/s]/home/edisondao/projects/11-785/11-785_EfficientAT/models/preprocess.py:56: FutureWarning: `torch.cuda.amp.autocast(args...)` is deprecated. Please use `torch.amp.autocast('cuda', args...)` instead.
+Epoch 27/80: accuracy: 0.9325, val_loss: 0.6126:  23%|█████████████████████████████████▋                                                                                                                | 3/13 [00:03<00:09,  1.06it/s]/home/edisondao/projects/11-785/11-785_EfficientAT/models/preprocess.py:56: FutureWarning: `torch.cuda.amp.autocast(args...)` is deprecated. Please use `torch.amp.autocast('cuda', args...)` instead.
+Epoch 27/80: accuracy: 0.9325, val_loss: 0.6126:  46%|███████████████████████████████████████████████████████████████████▍                                                                              | 6/13 [00:05<00:05,  1.34it/s]/home/edisondao/projects/11-785/11-785_EfficientAT/models/preprocess.py:56: FutureWarning: `torch.cuda.amp.autocast(args...)` is deprecated. Please use `torch.amp.autocast('cuda', args...)` instead.
+Epoch 27/80: accuracy: 0.9325, val_loss: 0.6126:  69%|█████████████████████████████████████████████████████████████████████████████████████████████████████                                             | 9/13 [00:07<00:02,  1.47it/s]/home/edisondao/projects/11-785/11-785_EfficientAT/models/preprocess.py:56: FutureWarning: `torch.cuda.amp.autocast(args...)` is deprecated. Please use `torch.amp.autocast('cuda', args...)` instead.
+Epoch 27/80: accuracy: 0.9325, val_loss: 0.6126:  92%|█████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████▊           | 12/13 [00:09<00:00,  1.47it/s]/home/edisondao/projects/11-785/11-785_EfficientAT/models/preprocess.py:56: FutureWarning: `torch.cuda.amp.autocast(args...)` is deprecated. Please use `torch.amp.autocast('cuda', args...)` instead.
+Epoch 28/80: accuracy: 0.9425, val_loss: 0.5610:   0%|                                                                                                                                                          | 0/13 [00:00<?, ?it/s]/home/edisondao/projects/11-785/11-785_EfficientAT/models/preprocess.py:56: FutureWarning: `torch.cuda.amp.autocast(args...)` is deprecated. Please use `torch.amp.autocast('cuda', args...)` instead.
+Epoch 28/80: accuracy: 0.9425, val_loss: 0.5610:   8%|███████████▏                                                                                                                                      | 1/13 [00:01<00:19,  1.62s/it]/home/edisondao/projects/11-785/11-785_EfficientAT/models/preprocess.py:56: FutureWarning: `torch.cuda.amp.autocast(args...)` is deprecated. Please use `torch.amp.autocast('cuda', args...)` instead.
+Epoch 28/80: accuracy: 0.9425, val_loss: 0.5610:  31%|████████████████████████████████████████████▉                                                                                                     | 4/13 [00:03<00:07,  1.21it/s]/home/edisondao/projects/11-785/11-785_EfficientAT/models/preprocess.py:56: FutureWarning: `torch.cuda.amp.autocast(args...)` is deprecated. Please use `torch.amp.autocast('cuda', args...)` instead.
+Epoch 28/80: accuracy: 0.9425, val_loss: 0.5610:  46%|███████████████████████████████████████████████████████████████████▍                                                                              | 6/13 [00:05<00:05,  1.22it/s]/home/edisondao/projects/11-785/11-785_EfficientAT/models/preprocess.py:56: FutureWarning: `torch.cuda.amp.autocast(args...)` is deprecated. Please use `torch.amp.autocast('cuda', args...)` instead.
+Epoch 28/80: accuracy: 0.9425, val_loss: 0.5610:  69%|█████████████████████████████████████████████████████████████████████████████████████████████████████                                             | 9/13 [00:07<00:03,  1.23it/s]/home/edisondao/projects/11-785/11-785_EfficientAT/models/preprocess.py:56: FutureWarning: `torch.cuda.amp.autocast(args...)` is deprecated. Please use `torch.amp.autocast('cuda', args...)` instead.
+Epoch 28/80: accuracy: 0.9425, val_loss: 0.5610:  92%|█████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████▊           | 12/13 [00:09<00:00,  1.35it/s]/home/edisondao/projects/11-785/11-785_EfficientAT/models/preprocess.py:56: FutureWarning: `torch.cuda.amp.autocast(args...)` is deprecated. Please use `torch.amp.autocast('cuda', args...)` instead.
+Epoch 28/80: accuracy: 0.9425, val_loss: 0.5610: 100%|█████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████| 13/13 [00:10<00:00,  1.24it/s]/home/edisondao/projects/11-785/11-785_EfficientAT/models/preprocess.py:56: FutureWarning: `torch.cuda.amp.autocast(args...)` is deprecated. Please use `torch.amp.autocast('cuda', args...)` instead.
+Epoch 29/80: accuracy: 0.9400, val_loss: 0.5210:   8%|███████████▏                                                                                                                                      | 1/13 [00:01<00:19,  1.60s/it]/home/edisondao/projects/11-785/11-785_EfficientAT/models/preprocess.py:56: FutureWarning: `torch.cuda.amp.autocast(args...)` is deprecated. Please use `torch.amp.autocast('cuda', args...)` instead.
+Epoch 29/80: accuracy: 0.9400, val_loss: 0.5210:  31%|████████████████████████████████████████████▉                                                                                                     | 4/13 [00:03<00:07,  1.16it/s]/home/edisondao/projects/11-785/11-785_EfficientAT/models/preprocess.py:56: FutureWarning: `torch.cuda.amp.autocast(args...)` is deprecated. Please use `torch.amp.autocast('cuda', args...)` instead.
+Epoch 29/80: accuracy: 0.9400, val_loss: 0.5210:  46%|███████████████████████████████████████████████████████████████████▍                                                                              | 6/13 [00:05<00:05,  1.31it/s]/home/edisondao/projects/11-785/11-785_EfficientAT/models/preprocess.py:56: FutureWarning: `torch.cuda.amp.autocast(args...)` is deprecated. Please use `torch.amp.autocast('cuda', args...)` instead.
+Epoch 29/80: accuracy: 0.9400, val_loss: 0.5210:  69%|█████████████████████████████████████████████████████████████████████████████████████████████████████                                             | 9/13 [00:07<00:03,  1.28it/s]/home/edisondao/projects/11-785/11-785_EfficientAT/models/preprocess.py:56: FutureWarning: `torch.cuda.amp.autocast(args...)` is deprecated. Please use `torch.amp.autocast('cuda', args...)` instead.
+Epoch 29/80: accuracy: 0.9400, val_loss: 0.5210:  85%|██████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████▋                      | 11/13 [00:09<00:01,  1.17it/s]/home/edisondao/projects/11-785/11-785_EfficientAT/models/preprocess.py:56: FutureWarning: `torch.cuda.amp.autocast(args...)` is deprecated. Please use `torch.amp.autocast('cuda', args...)` instead.
+Epoch 29/80: accuracy: 0.9400, val_loss: 0.5210: 100%|█████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████| 13/13 [00:10<00:00,  1.23it/s]/home/edisondao/projects/11-785/11-785_EfficientAT/models/preprocess.py:56: FutureWarning: `torch.cuda.amp.autocast(args...)` is deprecated. Please use `torch.amp.autocast('cuda', args...)` instead.
+Epoch 30/80: accuracy: 0.9475, val_loss: 0.4883:   8%|███████████▏                                                                                                                                      | 1/13 [00:01<00:17,  1.50s/it]/home/edisondao/projects/11-785/11-785_EfficientAT/models/preprocess.py:56: FutureWarning: `torch.cuda.amp.autocast(args...)` is deprecated. Please use `torch.amp.autocast('cuda', args...)` instead.
+Epoch 30/80: accuracy: 0.9475, val_loss: 0.4883:  31%|████████████████████████████████████████████▉                                                                                                     | 4/13 [00:03<00:06,  1.30it/s]/home/edisondao/projects/11-785/11-785_EfficientAT/models/preprocess.py:56: FutureWarning: `torch.cuda.amp.autocast(args...)` is deprecated. Please use `torch.amp.autocast('cuda', args...)` instead.
+Epoch 30/80: accuracy: 0.9475, val_loss: 0.4883:  54%|██████████████████████████████████████████████████████████████████████████████▌                                                                   | 7/13 [00:05<00:04,  1.40it/s]/home/edisondao/projects/11-785/11-785_EfficientAT/models/preprocess.py:56: FutureWarning: `torch.cuda.amp.autocast(args...)` is deprecated. Please use `torch.amp.autocast('cuda', args...)` instead.
+Epoch 30/80: accuracy: 0.9475, val_loss: 0.4883:  69%|█████████████████████████████████████████████████████████████████████████████████████████████████████                                             | 9/13 [00:07<00:02,  1.39it/s]/home/edisondao/projects/11-785/11-785_EfficientAT/models/preprocess.py:56: FutureWarning: `torch.cuda.amp.autocast(args...)` is deprecated. Please use `torch.amp.autocast('cuda', args...)` instead.
+Epoch 30/80: accuracy: 0.9475, val_loss: 0.4883: 100%|█████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████| 13/13 [00:09<00:00,  1.36it/s]/home/edisondao/projects/11-785/11-785_EfficientAT/models/preprocess.py:56: FutureWarning: `torch.cuda.amp.autocast(args...)` is deprecated. Please use `torch.amp.autocast('cuda', args...)` instead.
+Epoch 31/80: accuracy: 0.9450, val_loss: 0.4661:   0%|                                                                                                                                                          | 0/13 [00:00<?, ?it/s]/home/edisondao/projects/11-785/11-785_EfficientAT/models/preprocess.py:56: FutureWarning: `torch.cuda.amp.autocast(args...)` is deprecated. Please use `torch.amp.autocast('cuda', args...)` instead.
+Epoch 31/80: accuracy: 0.9450, val_loss: 0.4661:  15%|██████████████████████▍                                                                                                                           | 2/13 [00:02<00:10,  1.04it/s]/home/edisondao/projects/11-785/11-785_EfficientAT/models/preprocess.py:56: FutureWarning: `torch.cuda.amp.autocast(args...)` is deprecated. Please use `torch.amp.autocast('cuda', args...)` instead.
+Epoch 31/80: accuracy: 0.9450, val_loss: 0.4661:  38%|████████████████████████████████████████████████████████▏                                                                                         | 5/13 [00:04<00:05,  1.39it/s]/home/edisondao/projects/11-785/11-785_EfficientAT/models/preprocess.py:56: FutureWarning: `torch.cuda.amp.autocast(args...)` is deprecated. Please use `torch.amp.autocast('cuda', args...)` instead.
+Epoch 31/80: accuracy: 0.9450, val_loss: 0.4661:  62%|█████████████████████████████████████████████████████████████████████████████████████████▊                                                        | 8/13 [00:06<00:03,  1.48it/s]/home/edisondao/projects/11-785/11-785_EfficientAT/models/preprocess.py:56: FutureWarning: `torch.cuda.amp.autocast(args...)` is deprecated. Please use `torch.amp.autocast('cuda', args...)` instead.
+Epoch 31/80: accuracy: 0.9450, val_loss: 0.4661:  85%|██████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████▋                      | 11/13 [00:08<00:01,  1.41it/s]/home/edisondao/projects/11-785/11-785_EfficientAT/models/preprocess.py:56: FutureWarning: `torch.cuda.amp.autocast(args...)` is deprecated. Please use `torch.amp.autocast('cuda', args...)` instead.
+Epoch 31/80: accuracy: 0.9450, val_loss: 0.4661: 100%|█████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████| 13/13 [00:09<00:00,  1.33it/s]/home/edisondao/projects/11-785/11-785_EfficientAT/models/preprocess.py:56: FutureWarning: `torch.cuda.amp.autocast(args...)` is deprecated. Please use `torch.amp.autocast('cuda', args...)` instead.
+Epoch 32/80: accuracy: 0.9475, val_loss: 0.4445:   0%|                                                                                                                                                          | 0/13 [00:00<?, ?it/s]/home/edisondao/projects/11-785/11-785_EfficientAT/models/preprocess.py:56: FutureWarning: `torch.cuda.amp.autocast(args...)` is deprecated. Please use `torch.amp.autocast('cuda', args...)` instead.
+Epoch 32/80: accuracy: 0.9475, val_loss: 0.4445:  15%|██████████████████████▍                                                                                                                           | 2/13 [00:02<00:11,  1.05s/it]/home/edisondao/projects/11-785/11-785_EfficientAT/models/preprocess.py:56: FutureWarning: `torch.cuda.amp.autocast(args...)` is deprecated. Please use `torch.amp.autocast('cuda', args...)` instead.
+Epoch 32/80: accuracy: 0.9475, val_loss: 0.4445:  38%|████████████████████████████████████████████████████████▏                                                                                         | 5/13 [00:04<00:06,  1.24it/s]/home/edisondao/projects/11-785/11-785_EfficientAT/models/preprocess.py:56: FutureWarning: `torch.cuda.amp.autocast(args...)` is deprecated. Please use `torch.amp.autocast('cuda', args...)` instead.
+Epoch 32/80: accuracy: 0.9475, val_loss: 0.4445:  62%|█████████████████████████████████████████████████████████████████████████████████████████▊                                                        | 8/13 [00:06<00:03,  1.35it/s]/home/edisondao/projects/11-785/11-785_EfficientAT/models/preprocess.py:56: FutureWarning: `torch.cuda.amp.autocast(args...)` is deprecated. Please use `torch.amp.autocast('cuda', args...)` instead.
+Epoch 32/80: accuracy: 0.9475, val_loss: 0.4445:  77%|███████████████████████████████████████████████████████████████████████████████████████████████████████████████▌                                 | 10/13 [00:08<00:02,  1.28it/s]/home/edisondao/projects/11-785/11-785_EfficientAT/models/preprocess.py:56: FutureWarning: `torch.cuda.amp.autocast(args...)` is deprecated. Please use `torch.amp.autocast('cuda', args...)` instead.
+Epoch 32/80: accuracy: 0.9475, val_loss: 0.4445: 100%|█████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████| 13/13 [00:10<00:00,  1.26it/s]/home/edisondao/projects/11-785/11-785_EfficientAT/models/preprocess.py:56: FutureWarning: `torch.cuda.amp.autocast(args...)` is deprecated. Please use `torch.amp.autocast('cuda', args...)` instead.
+Epoch 33/80: accuracy: 0.9525, val_loss: 0.4234:   0%|                                                                                                                                                          | 0/13 [00:00<?, ?it/s]/home/edisondao/projects/11-785/11-785_EfficientAT/models/preprocess.py:56: FutureWarning: `torch.cuda.amp.autocast(args...)` is deprecated. Please use `torch.amp.autocast('cuda', args...)` instead.
+Epoch 33/80: accuracy: 0.9525, val_loss: 0.4234:  15%|██████████████████████▍                                                                                                                           | 2/13 [00:02<00:11,  1.02s/it]/home/edisondao/projects/11-785/11-785_EfficientAT/models/preprocess.py:56: FutureWarning: `torch.cuda.amp.autocast(args...)` is deprecated. Please use `torch.amp.autocast('cuda', args...)` instead.
+Epoch 33/80: accuracy: 0.9525, val_loss: 0.4234:  38%|████████████████████████████████████████████████████████▏                                                                                         | 5/13 [00:04<00:06,  1.25it/s]/home/edisondao/projects/11-785/11-785_EfficientAT/models/preprocess.py:56: FutureWarning: `torch.cuda.amp.autocast(args...)` is deprecated. Please use `torch.amp.autocast('cuda', args...)` instead.
+Epoch 33/80: accuracy: 0.9525, val_loss: 0.4234:  62%|█████████████████████████████████████████████████████████████████████████████████████████▊                                                        | 8/13 [00:06<00:03,  1.36it/s]/home/edisondao/projects/11-785/11-785_EfficientAT/models/preprocess.py:56: FutureWarning: `torch.cuda.amp.autocast(args...)` is deprecated. Please use `torch.amp.autocast('cuda', args...)` instead.
+Epoch 33/80: accuracy: 0.9525, val_loss: 0.4234:  85%|██████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████▋                      | 11/13 [00:08<00:01,  1.37it/s]/home/edisondao/projects/11-785/11-785_EfficientAT/models/preprocess.py:56: FutureWarning: `torch.cuda.amp.autocast(args...)` is deprecated. Please use `torch.amp.autocast('cuda', args...)` instead.
+Epoch 33/80: accuracy: 0.9525, val_loss: 0.4234: 100%|█████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████| 13/13 [00:09<00:00,  1.30it/s]/home/edisondao/projects/11-785/11-785_EfficientAT/models/preprocess.py:56: FutureWarning: `torch.cuda.amp.autocast(args...)` is deprecated. Please use `torch.amp.autocast('cuda', args...)` instead.
+Epoch 34/80: accuracy: 0.9525, val_loss: 0.4090:   0%|                                                                                                                                                          | 0/13 [00:00<?, ?it/s]/home/edisondao/projects/11-785/11-785_EfficientAT/models/preprocess.py:56: FutureWarning: `torch.cuda.amp.autocast(args...)` is deprecated. Please use `torch.amp.autocast('cuda', args...)` instead.
+Epoch 34/80: accuracy: 0.9525, val_loss: 0.4090:  23%|█████████████████████████████████▋                                                                                                                | 3/13 [00:02<00:09,  1.10it/s]/home/edisondao/projects/11-785/11-785_EfficientAT/models/preprocess.py:56: FutureWarning: `torch.cuda.amp.autocast(args...)` is deprecated. Please use `torch.amp.autocast('cuda', args...)` instead.
+Epoch 34/80: accuracy: 0.9525, val_loss: 0.4090:  38%|████████████████████████████████████████████████████████▏                                                                                         | 5/13 [00:04<00:06,  1.24it/s]/home/edisondao/projects/11-785/11-785_EfficientAT/models/preprocess.py:56: FutureWarning: `torch.cuda.amp.autocast(args...)` is deprecated. Please use `torch.amp.autocast('cuda', args...)` instead.
+Epoch 34/80: accuracy: 0.9525, val_loss: 0.4090:  62%|█████████████████████████████████████████████████████████████████████████████████████████▊                                                        | 8/13 [00:06<00:03,  1.26it/s]/home/edisondao/projects/11-785/11-785_EfficientAT/models/preprocess.py:56: FutureWarning: `torch.cuda.amp.autocast(args...)` is deprecated. Please use `torch.amp.autocast('cuda', args...)` instead.
+Epoch 34/80: accuracy: 0.9525, val_loss: 0.4090:  85%|██████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████▋                      | 11/13 [00:09<00:01,  1.30it/s]/home/edisondao/projects/11-785/11-785_EfficientAT/models/preprocess.py:56: FutureWarning: `torch.cuda.amp.autocast(args...)` is deprecated. Please use `torch.amp.autocast('cuda', args...)` instead.
+Epoch 34/80: accuracy: 0.9525, val_loss: 0.4090: 100%|█████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████| 13/13 [00:10<00:00,  1.25it/s]/home/edisondao/projects/11-785/11-785_EfficientAT/models/preprocess.py:56: FutureWarning: `torch.cuda.amp.autocast(args...)` is deprecated. Please use `torch.amp.autocast('cuda', args...)` instead.
+Epoch 35/80: accuracy: 0.9550, val_loss: 0.4017:   0%|                                                                                                                                                          | 0/13 [00:00<?, ?it/s]/home/edisondao/projects/11-785/11-785_EfficientAT/models/preprocess.py:56: FutureWarning: `torch.cuda.amp.autocast(args...)` is deprecated. Please use `torch.amp.autocast('cuda', args...)` instead.
+Epoch 35/80: accuracy: 0.9550, val_loss: 0.4017:  15%|██████████████████████▍                                                                                                                           | 2/13 [00:02<00:13,  1.19s/it]/home/edisondao/projects/11-785/11-785_EfficientAT/models/preprocess.py:56: FutureWarning: `torch.cuda.amp.autocast(args...)` is deprecated. Please use `torch.amp.autocast('cuda', args...)` instead.
+Epoch 35/80: accuracy: 0.9550, val_loss: 0.4017:  38%|████████████████████████████████████████████████████████▏                                                                                         | 5/13 [00:04<00:06,  1.28it/s]/home/edisondao/projects/11-785/11-785_EfficientAT/models/preprocess.py:56: FutureWarning: `torch.cuda.amp.autocast(args...)` is deprecated. Please use `torch.amp.autocast('cuda', args...)` instead.
+Epoch 35/80: accuracy: 0.9550, val_loss: 0.4017:  62%|█████████████████████████████████████████████████████████████████████████████████████████▊                                                        | 8/13 [00:06<00:03,  1.35it/s]/home/edisondao/projects/11-785/11-785_EfficientAT/models/preprocess.py:56: FutureWarning: `torch.cuda.amp.autocast(args...)` is deprecated. Please use `torch.amp.autocast('cuda', args...)` instead.
+Epoch 35/80: accuracy: 0.9550, val_loss: 0.4017:  85%|██████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████▋                      | 11/13 [00:08<00:01,  1.44it/s]/home/edisondao/projects/11-785/11-785_EfficientAT/models/preprocess.py:56: FutureWarning: `torch.cuda.amp.autocast(args...)` is deprecated. Please use `torch.amp.autocast('cuda', args...)` instead.
+Epoch 35/80: accuracy: 0.9550, val_loss: 0.4017: 100%|█████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████| 13/13 [00:09<00:00,  1.30it/s]/home/edisondao/projects/11-785/11-785_EfficientAT/models/preprocess.py:56: FutureWarning: `torch.cuda.amp.autocast(args...)` is deprecated. Please use `torch.amp.autocast('cuda', args...)` instead.
+Epoch 36/80: accuracy: 0.9525, val_loss: 0.3925:   0%|                                                                                                                                                          | 0/13 [00:00<?, ?it/s]/home/edisondao/projects/11-785/11-785_EfficientAT/models/preprocess.py:56: FutureWarning: `torch.cuda.amp.autocast(args...)` is deprecated. Please use `torch.amp.autocast('cuda', args...)` instead.
+Epoch 36/80: accuracy: 0.9525, val_loss: 0.3925:  23%|█████████████████████████████████▋                                                                                                                | 3/13 [00:03<00:08,  1.11it/s]/home/edisondao/projects/11-785/11-785_EfficientAT/models/preprocess.py:56: FutureWarning: `torch.cuda.amp.autocast(args...)` is deprecated. Please use `torch.amp.autocast('cuda', args...)` instead.
+Epoch 36/80: accuracy: 0.9525, val_loss: 0.3925:  46%|███████████████████████████████████████████████████████████████████▍                                                                              | 6/13 [00:04<00:05,  1.39it/s]/home/edisondao/projects/11-785/11-785_EfficientAT/models/preprocess.py:56: FutureWarning: `torch.cuda.amp.autocast(args...)` is deprecated. Please use `torch.amp.autocast('cuda', args...)` instead.
+Epoch 36/80: accuracy: 0.9525, val_loss: 0.3925:  69%|█████████████████████████████████████████████████████████████████████████████████████████████████████                                             | 9/13 [00:07<00:02,  1.39it/s]/home/edisondao/projects/11-785/11-785_EfficientAT/models/preprocess.py:56: FutureWarning: `torch.cuda.amp.autocast(args...)` is deprecated. Please use `torch.amp.autocast('cuda', args...)` instead.
+Epoch 36/80: accuracy: 0.9525, val_loss: 0.3925:  92%|█████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████▊           | 12/13 [00:09<00:00,  1.36it/s]/home/edisondao/projects/11-785/11-785_EfficientAT/models/preprocess.py:56: FutureWarning: `torch.cuda.amp.autocast(args...)` is deprecated. Please use `torch.amp.autocast('cuda', args...)` instead.
+Epoch 36/80: accuracy: 0.9525, val_loss: 0.3925: 100%|█████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████| 13/13 [00:09<00:00,  1.31it/s]/home/edisondao/projects/11-785/11-785_EfficientAT/models/preprocess.py:56: FutureWarning: `torch.cuda.amp.autocast(args...)` is deprecated. Please use `torch.amp.autocast('cuda', args...)` instead.
+Epoch 37/80: accuracy: 0.9550, val_loss: 0.3831:   8%|███████████▏                                                                                                                                      | 1/13 [00:01<00:17,  1.48s/it]/home/edisondao/projects/11-785/11-785_EfficientAT/models/preprocess.py:56: FutureWarning: `torch.cuda.amp.autocast(args...)` is deprecated. Please use `torch.amp.autocast('cuda', args...)` instead.
+Epoch 37/80: accuracy: 0.9550, val_loss: 0.3831:  31%|████████████████████████████████████████████▉                                                                                                     | 4/13 [00:03<00:07,  1.23it/s]/home/edisondao/projects/11-785/11-785_EfficientAT/models/preprocess.py:56: FutureWarning: `torch.cuda.amp.autocast(args...)` is deprecated. Please use `torch.amp.autocast('cuda', args...)` instead.
+Epoch 37/80: accuracy: 0.9550, val_loss: 0.3831:  46%|███████████████████████████████████████████████████████████████████▍                                                                              | 6/13 [00:05<00:05,  1.32it/s]/home/edisondao/projects/11-785/11-785_EfficientAT/models/preprocess.py:56: FutureWarning: `torch.cuda.amp.autocast(args...)` is deprecated. Please use `torch.amp.autocast('cuda', args...)` instead.
+Epoch 37/80: accuracy: 0.9550, val_loss: 0.3831:  69%|█████████████████████████████████████████████████████████████████████████████████████████████████████                                             | 9/13 [00:07<00:02,  1.43it/s]/home/edisondao/projects/11-785/11-785_EfficientAT/models/preprocess.py:56: FutureWarning: `torch.cuda.amp.autocast(args...)` is deprecated. Please use `torch.amp.autocast('cuda', args...)` instead.
+Epoch 37/80: accuracy: 0.9550, val_loss: 0.3831:  92%|█████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████▊           | 12/13 [00:09<00:00,  1.39it/s]/home/edisondao/projects/11-785/11-785_EfficientAT/models/preprocess.py:56: FutureWarning: `torch.cuda.amp.autocast(args...)` is deprecated. Please use `torch.amp.autocast('cuda', args...)` instead.
+Validating: 100%|████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████| 4/4 [00:01<00:00,  2.38it/s]/home/edisondao/projects/11-785/11-785_EfficientAT/models/preprocess.py:56: FutureWarning: `torch.cuda.amp.autocast(args...)` is deprecated. Please use `torch.amp.autocast('cuda', args...)` instead.
+  with torch.cuda.amp.autocast(enabled=False):███████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████| 4/4 [00:01<00:00,  2.38it/s]/home/edisondao/projects/11-785/11-785_EfficientAT/models/preprocess.py:56: FutureWarning: `torch.cuda.amp.autocast(args...)` is deprecated. Please use `torch.amp.autocast('cuda', args...)` instead.
+  with torch.cuda.amp.autocast(enabled=False):███████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████| 4/4 [00:01<00:00,  2.38it/s]/home/edisondao/projects/11-785/11-785_EfficientAT/models/preprocess.py:56: FutureWarning: `torch.cuda.amp.autocast(args...)` is deprecated. Please use `torch.amp.autocast('cuda', args...)` instead.
+  with torch.cuda.amp.autocast(enabled=False):███████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████| 4/4 [00:01<00:00,  2.38it/s]/home/edisondao/projects/11-785/11-785_EfficientAT/models/preprocess.py:56: FutureWarning: `torch.cuda.amp.autocast(args...)` is deprecated. Please use `torch.amp.autocast('cuda', args...)` instead.
+  with torch.cuda.amp.autocast(enabled=False):███████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████| 4/4 [00:01<00:00,  2.38it/s]/home/edisondao/projects/11-785/11-785_EfficientAT/models/preprocess.py:56: FutureWarning: `torch.cuda.amp.autocast(args...)` is deprecated. Please use `torch.amp.autocast('cuda', args...)` instead.
+  with torch.cuda.amp.autocast(enabled=False):███████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████| 4/4 [00:01<00:00,  2.38it/s]/home/edisondao/projects/11-785/11-785_EfficientAT/models/preprocess.py:56: FutureWarning: `torch.cuda.amp.autocast(args...)` is deprecated. Please use `torch.amp.autocast('cuda', args...)` instead.
+Validating: 100%|████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████| 4/4 [00:01<00:00,  2.53it/s]/home/edisondao/projects/11-785/11-785_EfficientAT/models/preprocess.py:56: FutureWarning: `torch.cuda.amp.autocast(args...)` is deprecated. Please use `torch.amp.autocast('cuda', args...)` instead.
+  with torch.cuda.amp.autocast(enabled=False):███████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████| 4/4 [00:01<00:00,  2.53it/s]/home/edisondao/projects/11-785/11-785_EfficientAT/models/preprocess.py:56: FutureWarning: `torch.cuda.amp.autocast(args...)` is deprecated. Please use `torch.amp.autocast('cuda', args...)` instead.
+  with torch.cuda.amp.autocast(enabled=False):███████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████| 4/4 [00:01<00:00,  2.53it/s]/home/edisondao/projects/11-785/11-785_EfficientAT/models/preprocess.py:56: FutureWarning: `torch.cuda.amp.autocast(args...)` is deprecated. Please use `torch.amp.autocast('cuda', args...)` instead.
+  with torch.cuda.amp.autocast(enabled=False):███████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████| 4/4 [00:01<00:00,  2.53it/s]/home/edisondao/projects/11-785/11-785_EfficientAT/models/preprocess.py:56: FutureWarning: `torch.cuda.amp.autocast(args...)` is deprecated. Please use `torch.amp.autocast('cuda', args...)` instead.
+  with torch.cuda.amp.autocast(enabled=False):███████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████| 4/4 [00:01<00:00,  2.53it/s]/home/edisondao/projects/11-785/11-785_EfficientAT/models/preprocess.py:56: FutureWarning: `torch.cuda.amp.autocast(args...)` is deprecated. Please use `torch.amp.autocast('cuda', args...)` instead.
+Validating:   0%|                                                                                                                                                                                                | 0/4 [00:00<?, ?it/s]/home/edisondao/projects/11-785/11-785_EfficientAT/models/preprocess.py:56: FutureWarning: `torch.cuda.amp.autocast(args...)` is deprecated. Please use `torch.amp.autocast('cuda', args...)` instead.
+Epoch 40/80: accuracy: 0.9550, val_loss: 0.3681:   0%|                                                                                                                                                          | 0/13 [00:00<?, ?it/s]/home/edisondao/projects/11-785/11-785_EfficientAT/models/preprocess.py:56: FutureWarning: `torch.cuda.amp.autocast(args...)` is deprecated. Please use `torch.amp.autocast('cuda', args...)` instead.
+  with torch.cuda.amp.autocast(enabled=False):1:   0%|                                                                                                                                                          | 0/13 [00:00<?, ?it/s]/home/edisondao/projects/11-785/11-785_EfficientAT/models/preprocess.py:56: FutureWarning: `torch.cuda.amp.autocast(args...)` is deprecated. Please use `torch.amp.autocast('cuda', args...)` instead.
+  with torch.cuda.amp.autocast(enabled=False):1:   0%|                                                                                                                                                          | 0/13 [00:00<?, ?it/s]/home/edisondao/projects/11-785/11-785_EfficientAT/models/preprocess.py:56: FutureWarning: `torch.cuda.amp.autocast(args...)` is deprecated. Please use `torch.amp.autocast('cuda', args...)` instead.
+  with torch.cuda.amp.autocast(enabled=False):1:   0%|                                                                                                                                                          | 0/13 [00:00<?, ?it/s]/home/edisondao/projects/11-785/11-785_EfficientAT/models/preprocess.py:56: FutureWarning: `torch.cuda.amp.autocast(args...)` is deprecated. Please use `torch.amp.autocast('cuda', args...)` instead.
+  with torch.cuda.amp.autocast(enabled=False):1:   0%|                                                                                                                                                          | 0/13 [00:00<?, ?it/s]/home/edisondao/projects/11-785/11-785_EfficientAT/models/preprocess.py:56: FutureWarning: `torch.cuda.amp.autocast(args...)` is deprecated. Please use `torch.amp.autocast('cuda', args...)` instead.
+  with torch.cuda.amp.autocast(enabled=False):1:   0%|                                                                                                                                                          | 0/13 [00:00<?, ?it/s]/home/edisondao/projects/11-785/11-785_EfficientAT/models/preprocess.py:56: FutureWarning: `torch.cuda.amp.autocast(args...)` is deprecated. Please use `torch.amp.autocast('cuda', args...)` instead.
+Validating: 100%|████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████| 4/4 [00:01<00:00,  2.56it/s]/home/edisondao/projects/11-785/11-785_EfficientAT/models/preprocess.py:56: FutureWarning: `torch.cuda.amp.autocast(args...)` is deprecated. Please use `torch.amp.autocast('cuda', args...)` instead.
+  with torch.cuda.amp.autocast(enabled=False):███████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████| 4/4 [00:01<00:00,  2.56it/s]/home/edisondao/projects/11-785/11-785_EfficientAT/models/preprocess.py:56: FutureWarning: `torch.cuda.amp.autocast(args...)` is deprecated. Please use `torch.amp.autocast('cuda', args...)` instead.
+  with torch.cuda.amp.autocast(enabled=False):███████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████| 4/4 [00:01<00:00,  2.56it/s]/home/edisondao/projects/11-785/11-785_EfficientAT/models/preprocess.py:56: FutureWarning: `torch.cuda.amp.autocast(args...)` is deprecated. Please use `torch.amp.autocast('cuda', args...)` instead.
+  with torch.cuda.amp.autocast(enabled=False):███████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████| 4/4 [00:01<00:00,  2.56it/s]/home/edisondao/projects/11-785/11-785_EfficientAT/models/preprocess.py:56: FutureWarning: `torch.cuda.amp.autocast(args...)` is deprecated. Please use `torch.amp.autocast('cuda', args...)` instead.
+  with torch.cuda.amp.autocast(enabled=False):███████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████| 4/4 [00:01<00:00,  2.56it/s]/home/edisondao/projects/11-785/11-785_EfficientAT/models/preprocess.py:56: FutureWarning: `torch.cuda.amp.autocast(args...)` is deprecated. Please use `torch.amp.autocast('cuda', args...)` instead.
+  with torch.cuda.amp.autocast(enabled=False):███████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████| 4/4 [00:01<00:00,  2.56it/s]/home/edisondao/projects/11-785/11-785_EfficientAT/models/preprocess.py:56: FutureWarning: `torch.cuda.amp.autocast(args...)` is deprecated. Please use `torch.amp.autocast('cuda', args...)` instead.
+Validating: 100%|████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████| 4/4 [00:01<00:00,  2.67it/s]/home/edisondao/projects/11-785/11-785_EfficientAT/models/preprocess.py:56: FutureWarning: `torch.cuda.amp.autocast(args...)` is deprecated. Please use `torch.amp.autocast('cuda', args...)` instead.
+  with torch.cuda.amp.autocast(enabled=False):███████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████| 4/4 [00:01<00:00,  2.67it/s]/home/edisondao/projects/11-785/11-785_EfficientAT/models/preprocess.py:56: FutureWarning: `torch.cuda.amp.autocast(args...)` is deprecated. Please use `torch.amp.autocast('cuda', args...)` instead.
+  with torch.cuda.amp.autocast(enabled=False):███████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████| 4/4 [00:01<00:00,  2.67it/s]/home/edisondao/projects/11-785/11-785_EfficientAT/models/preprocess.py:56: FutureWarning: `torch.cuda.amp.autocast(args...)` is deprecated. Please use `torch.amp.autocast('cuda', args...)` instead.
+  with torch.cuda.amp.autocast(enabled=False):███████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████| 4/4 [00:01<00:00,  2.67it/s]/home/edisondao/projects/11-785/11-785_EfficientAT/models/preprocess.py:56: FutureWarning: `torch.cuda.amp.autocast(args...)` is deprecated. Please use `torch.amp.autocast('cuda', args...)` instead.
+  with torch.cuda.amp.autocast(enabled=False):███████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████| 4/4 [00:01<00:00,  2.67it/s]/home/edisondao/projects/11-785/11-785_EfficientAT/models/preprocess.py:56: FutureWarning: `torch.cuda.amp.autocast(args...)` is deprecated. Please use `torch.amp.autocast('cuda', args...)` instead.
+Validating:   0%|                                                                                                                                                                                                | 0/4 [00:00<?, ?it/s]/home/edisondao/projects/11-785/11-785_EfficientAT/models/preprocess.py:56: FutureWarning: `torch.cuda.amp.autocast(args...)` is deprecated. Please use `torch.amp.autocast('cuda', args...)` instead.
+Epoch 43/80: accuracy: 0.9575, val_loss: 0.3543:   0%|                                                                                                                                                          | 0/13 [00:00<?, ?it/s]/home/edisondao/projects/11-785/11-785_EfficientAT/models/preprocess.py:56: FutureWarning: `torch.cuda.amp.autocast(args...)` is deprecated. Please use `torch.amp.autocast('cuda', args...)` instead.
+  with torch.cuda.amp.autocast(enabled=False):3:   0%|                                                                                                                                                          | 0/13 [00:00<?, ?it/s]/home/edisondao/projects/11-785/11-785_EfficientAT/models/preprocess.py:56: FutureWarning: `torch.cuda.amp.autocast(args...)` is deprecated. Please use `torch.amp.autocast('cuda', args...)` instead.
+  with torch.cuda.amp.autocast(enabled=False):3:   0%|                                                                                                                                                          | 0/13 [00:00<?, ?it/s]/home/edisondao/projects/11-785/11-785_EfficientAT/models/preprocess.py:56: FutureWarning: `torch.cuda.amp.autocast(args...)` is deprecated. Please use `torch.amp.autocast('cuda', args...)` instead.
+  with torch.cuda.amp.autocast(enabled=False):3:   0%|                                                                                                                                                          | 0/13 [00:00<?, ?it/s]/home/edisondao/projects/11-785/11-785_EfficientAT/models/preprocess.py:56: FutureWarning: `torch.cuda.amp.autocast(args...)` is deprecated. Please use `torch.amp.autocast('cuda', args...)` instead.
+  with torch.cuda.amp.autocast(enabled=False):3:   0%|                                                                                                                                                          | 0/13 [00:00<?, ?it/s]/home/edisondao/projects/11-785/11-785_EfficientAT/models/preprocess.py:56: FutureWarning: `torch.cuda.amp.autocast(args...)` is deprecated. Please use `torch.amp.autocast('cuda', args...)` instead.
+Validating:   0%|                                                                                                                                                                                                | 0/4 [00:00<?, ?it/s]/home/edisondao/projects/11-785/11-785_EfficientAT/models/preprocess.py:56: FutureWarning: `torch.cuda.amp.autocast(args...)` is deprecated. Please use `torch.amp.autocast('cuda', args...)` instead.
+Epoch 44/80: accuracy: 0.9550, val_loss: 0.3498:   0%|                                                                                                                                                          | 0/13 [00:00<?, ?it/s]/home/edisondao/projects/11-785/11-785_EfficientAT/models/preprocess.py:56: FutureWarning: `torch.cuda.amp.autocast(args...)` is deprecated. Please use `torch.amp.autocast('cuda', args...)` instead.
+  with torch.cuda.amp.autocast(enabled=False):8:   0%|                                                                                                                                                          | 0/13 [00:00<?, ?it/s]/home/edisondao/projects/11-785/11-785_EfficientAT/models/preprocess.py:56: FutureWarning: `torch.cuda.amp.autocast(args...)` is deprecated. Please use `torch.amp.autocast('cuda', args...)` instead.
+  with torch.cuda.amp.autocast(enabled=False):8:   0%|                                                                                                                                                          | 0/13 [00:00<?, ?it/s]/home/edisondao/projects/11-785/11-785_EfficientAT/models/preprocess.py:56: FutureWarning: `torch.cuda.amp.autocast(args...)` is deprecated. Please use `torch.amp.autocast('cuda', args...)` instead.
+  with torch.cuda.amp.autocast(enabled=False):8:   0%|                                                                                                                                                          | 0/13 [00:00<?, ?it/s]/home/edisondao/projects/11-785/11-785_EfficientAT/models/preprocess.py:56: FutureWarning: `torch.cuda.amp.autocast(args...)` is deprecated. Please use `torch.amp.autocast('cuda', args...)` instead.
+  with torch.cuda.amp.autocast(enabled=False):8:   0%|                                                                                                                                                          | 0/13 [00:00<?, ?it/s]/home/edisondao/projects/11-785/11-785_EfficientAT/models/preprocess.py:56: FutureWarning: `torch.cuda.amp.autocast(args...)` is deprecated. Please use `torch.amp.autocast('cuda', args...)` instead.
+Validating:   0%|                                                                                                                                                                                                | 0/4 [00:00<?, ?it/s]/home/edisondao/projects/11-785/11-785_EfficientAT/models/preprocess.py:56: FutureWarning: `torch.cuda.amp.autocast(args...)` is deprecated. Please use `torch.amp.autocast('cuda', args...)` instead.
+Epoch 45/80: accuracy: 0.9550, val_loss: 0.3475:   0%|                                                                                                                                                          | 0/13 [00:00<?, ?it/s]/home/edisondao/projects/11-785/11-785_EfficientAT/models/preprocess.py:56: FutureWarning: `torch.cuda.amp.autocast(args...)` is deprecated. Please use `torch.amp.autocast('cuda', args...)` instead.
+  with torch.cuda.amp.autocast(enabled=False):5:   0%|                                                                                                                                                          | 0/13 [00:00<?, ?it/s]/home/edisondao/projects/11-785/11-785_EfficientAT/models/preprocess.py:56: FutureWarning: `torch.cuda.amp.autocast(args...)` is deprecated. Please use `torch.amp.autocast('cuda', args...)` instead.
+  with torch.cuda.amp.autocast(enabled=False):5:   0%|                                                                                                                                                          | 0/13 [00:00<?, ?it/s]/home/edisondao/projects/11-785/11-785_EfficientAT/models/preprocess.py:56: FutureWarning: `torch.cuda.amp.autocast(args...)` is deprecated. Please use `torch.amp.autocast('cuda', args...)` instead.
+  with torch.cuda.amp.autocast(enabled=False):5:   0%|                                                                                                                                                          | 0/13 [00:00<?, ?it/s]/home/edisondao/projects/11-785/11-785_EfficientAT/models/preprocess.py:56: FutureWarning: `torch.cuda.amp.autocast(args...)` is deprecated. Please use `torch.amp.autocast('cuda', args...)` instead.
+  with torch.cuda.amp.autocast(enabled=False):5:   0%|                                                                                                                                                          | 0/13 [00:00<?, ?it/s]/home/edisondao/projects/11-785/11-785_EfficientAT/models/preprocess.py:56: FutureWarning: `torch.cuda.amp.autocast(args...)` is deprecated. Please use `torch.amp.autocast('cuda', args...)` instead.
+Validating:   0%|                                                                                                                                                                                                | 0/4 [00:00<?, ?it/s]/home/edisondao/projects/11-785/11-785_EfficientAT/models/preprocess.py:56: FutureWarning: `torch.cuda.amp.autocast(args...)` is deprecated. Please use `torch.amp.autocast('cuda', args...)` instead.
+Epoch 46/80: accuracy: 0.9550, val_loss: 0.3454:   0%|                                                                                                                                                          | 0/13 [00:00<?, ?it/s]/home/edisondao/projects/11-785/11-785_EfficientAT/models/preprocess.py:56: FutureWarning: `torch.cuda.amp.autocast(args...)` is deprecated. Please use `torch.amp.autocast('cuda', args...)` instead.
+  with torch.cuda.amp.autocast(enabled=False):4:   0%|                                                                                                                                                          | 0/13 [00:00<?, ?it/s]/home/edisondao/projects/11-785/11-785_EfficientAT/models/preprocess.py:56: FutureWarning: `torch.cuda.amp.autocast(args...)` is deprecated. Please use `torch.amp.autocast('cuda', args...)` instead.
+  with torch.cuda.amp.autocast(enabled=False):4:   0%|                                                                                                                                                          | 0/13 [00:00<?, ?it/s]/home/edisondao/projects/11-785/11-785_EfficientAT/models/preprocess.py:56: FutureWarning: `torch.cuda.amp.autocast(args...)` is deprecated. Please use `torch.amp.autocast('cuda', args...)` instead.
+  with torch.cuda.amp.autocast(enabled=False):4:   0%|                                                                                                                                                          | 0/13 [00:00<?, ?it/s]/home/edisondao/projects/11-785/11-785_EfficientAT/models/preprocess.py:56: FutureWarning: `torch.cuda.amp.autocast(args...)` is deprecated. Please use `torch.amp.autocast('cuda', args...)` instead.
+  with torch.cuda.amp.autocast(enabled=False):4:   0%|                                                                                                                                                          | 0/13 [00:00<?, ?it/s]/home/edisondao/projects/11-785/11-785_EfficientAT/models/preprocess.py:56: FutureWarning: `torch.cuda.amp.autocast(args...)` is deprecated. Please use `torch.amp.autocast('cuda', args...)` instead.
+Validating:  25%|██████████████████████████████████████████████                                                                                                                                          | 1/4 [00:00<00:02,  1.08it/s]/home/edisondao/projects/11-785/11-785_EfficientAT/models/preprocess.py:56: FutureWarning: `torch.cuda.amp.autocast(args...)` is deprecated. Please use `torch.amp.autocast('cuda', args...)` instead.
+Epoch 47/80: accuracy: 0.9550, val_loss: 0.3423:   0%|                                                                                                                                                          | 0/13 [00:00<?, ?it/s]/home/edisondao/projects/11-785/11-785_EfficientAT/models/preprocess.py:56: FutureWarning: `torch.cuda.amp.autocast(args...)` is deprecated. Please use `torch.amp.autocast('cuda', args...)` instead.
+Epoch 47/80: accuracy: 0.9550, val_loss: 0.3423:  23%|█████████████████████████████████▋                                                                                                                | 3/13 [00:02<00:08,  1.16it/s]/home/edisondao/projects/11-785/11-785_EfficientAT/models/preprocess.py:56: FutureWarning: `torch.cuda.amp.autocast(args...)` is deprecated. Please use `torch.amp.autocast('cuda', args...)` instead.
+Epoch 47/80: accuracy: 0.9550, val_loss: 0.3423:  23%|█████████████████████████████████▋                                                                                                                | 3/13 [00:02<00:08,  1.16it/s]/home/edisondao/projects/11-785/11-785_EfficientAT/models/preprocess.py:56: FutureWarning: `torch.cuda.amp.autocast(args...)` is deprecated. Please use `torch.amp.autocast('cuda', args...)` instead.
+Epoch 47/80: accuracy: 0.9550, val_loss: 0.3423:  23%|█████████████████████████████████▋                                                                                                                | 3/13 [00:02<00:08,  1.16it/s]/home/edisondao/projects/11-785/11-785_EfficientAT/models/preprocess.py:56: FutureWarning: `torch.cuda.amp.autocast(args...)` is deprecated. Please use `torch.amp.autocast('cuda', args...)` instead.
+Epoch 47/80: accuracy: 0.9550, val_loss: 0.3423:  23%|█████████████████████████████████▋                                                                                                                | 3/13 [00:02<00:08,  1.16it/s]/home/edisondao/projects/11-785/11-785_EfficientAT/models/preprocess.py:56: FutureWarning: `torch.cuda.amp.autocast(args...)` is deprecated. Please use `torch.amp.autocast('cuda', args...)` instead.
+Validating:  50%|████████████████████████████████████████████████████████████████████████████████████████████                                                                                            | 2/4 [00:01<00:01,  1.86it/s]/home/edisondao/projects/11-785/11-785_EfficientAT/models/preprocess.py:56: FutureWarning: `torch.cuda.amp.autocast(args...)` is deprecated. Please use `torch.amp.autocast('cuda', args...)` instead.
+Epoch 48/80: accuracy: 0.9575, val_loss: 0.3394:   8%|███████████▏                                                                                                                                      | 1/13 [00:01<00:17,  1.48s/it]/home/edisondao/projects/11-785/11-785_EfficientAT/models/preprocess.py:56: FutureWarning: `torch.cuda.amp.autocast(args...)` is deprecated. Please use `torch.amp.autocast('cuda', args...)` instead.
+Epoch 48/80: accuracy: 0.9575, val_loss: 0.3394:  23%|█████████████████████████████████▋                                                                                                                | 3/13 [00:02<00:08,  1.15it/s]/home/edisondao/projects/11-785/11-785_EfficientAT/models/preprocess.py:56: FutureWarning: `torch.cuda.amp.autocast(args...)` is deprecated. Please use `torch.amp.autocast('cuda', args...)` instead.
+Epoch 48/80: accuracy: 0.9575, val_loss: 0.3394:  23%|█████████████████████████████████▋                                                                                                                | 3/13 [00:02<00:08,  1.15it/s]/home/edisondao/projects/11-785/11-785_EfficientAT/models/preprocess.py:56: FutureWarning: `torch.cuda.amp.autocast(args...)` is deprecated. Please use `torch.amp.autocast('cuda', args...)` instead.
+Epoch 48/80: accuracy: 0.9575, val_loss: 0.3394:  23%|█████████████████████████████████▋                                                                                                                | 3/13 [00:02<00:08,  1.15it/s]/home/edisondao/projects/11-785/11-785_EfficientAT/models/preprocess.py:56: FutureWarning: `torch.cuda.amp.autocast(args...)` is deprecated. Please use `torch.amp.autocast('cuda', args...)` instead.
+Validating:   0%|                                                                                                                                                                                                | 0/4 [00:00<?, ?it/s]/home/edisondao/projects/11-785/11-785_EfficientAT/models/preprocess.py:56: FutureWarning: `torch.cuda.amp.autocast(args...)` is deprecated. Please use `torch.amp.autocast('cuda', args...)` instead.
+Epoch 49/80: accuracy: 0.9575, val_loss: 0.3357:   0%|                                                                                                                                                          | 0/13 [00:00<?, ?it/s]/home/edisondao/projects/11-785/11-785_EfficientAT/models/preprocess.py:56: FutureWarning: `torch.cuda.amp.autocast(args...)` is deprecated. Please use `torch.amp.autocast('cuda', args...)` instead.
+  with torch.cuda.amp.autocast(enabled=False):7:   0%|                                                                                                                                                          | 0/13 [00:00<?, ?it/s]/home/edisondao/projects/11-785/11-785_EfficientAT/models/preprocess.py:56: FutureWarning: `torch.cuda.amp.autocast(args...)` is deprecated. Please use `torch.amp.autocast('cuda', args...)` instead.
+  with torch.cuda.amp.autocast(enabled=False):7:   0%|                                                                                                                                                          | 0/13 [00:00<?, ?it/s]/home/edisondao/projects/11-785/11-785_EfficientAT/models/preprocess.py:56: FutureWarning: `torch.cuda.amp.autocast(args...)` is deprecated. Please use `torch.amp.autocast('cuda', args...)` instead.
+  with torch.cuda.amp.autocast(enabled=False):7:   0%|                                                                                                                                                          | 0/13 [00:00<?, ?it/s]/home/edisondao/projects/11-785/11-785_EfficientAT/models/preprocess.py:56: FutureWarning: `torch.cuda.amp.autocast(args...)` is deprecated. Please use `torch.amp.autocast('cuda', args...)` instead.
+  with torch.cuda.amp.autocast(enabled=False):7:   0%|                                                                                                                                                          | 0/13 [00:00<?, ?it/s]/home/edisondao/projects/11-785/11-785_EfficientAT/models/preprocess.py:56: FutureWarning: `torch.cuda.amp.autocast(args...)` is deprecated. Please use `torch.amp.autocast('cuda', args...)` instead.
+Validating:   0%|                                                                                                                                                                                                | 0/4 [00:00<?, ?it/s]/home/edisondao/projects/11-785/11-785_EfficientAT/models/preprocess.py:56: FutureWarning: `torch.cuda.amp.autocast(args...)` is deprecated. Please use `torch.amp.autocast('cuda', args...)` instead.
+Epoch 50/80: accuracy: 0.9575, val_loss: 0.3321:   0%|                                                                                                                                                          | 0/13 [00:00<?, ?it/s]/home/edisondao/projects/11-785/11-785_EfficientAT/models/preprocess.py:56: FutureWarning: `torch.cuda.amp.autocast(args...)` is deprecated. Please use `torch.amp.autocast('cuda', args...)` instead.
+  with torch.cuda.amp.autocast(enabled=False):1:   0%|                                                                                                                                                          | 0/13 [00:00<?, ?it/s]/home/edisondao/projects/11-785/11-785_EfficientAT/models/preprocess.py:56: FutureWarning: `torch.cuda.amp.autocast(args...)` is deprecated. Please use `torch.amp.autocast('cuda', args...)` instead.
+  with torch.cuda.amp.autocast(enabled=False):1:   0%|                                                                                                                                                          | 0/13 [00:00<?, ?it/s]/home/edisondao/projects/11-785/11-785_EfficientAT/models/preprocess.py:56: FutureWarning: `torch.cuda.amp.autocast(args...)` is deprecated. Please use `torch.amp.autocast('cuda', args...)` instead.
+  with torch.cuda.amp.autocast(enabled=False):1:   0%|                                                                                                                                                          | 0/13 [00:00<?, ?it/s]/home/edisondao/projects/11-785/11-785_EfficientAT/models/preprocess.py:56: FutureWarning: `torch.cuda.amp.autocast(args...)` is deprecated. Please use `torch.amp.autocast('cuda', args...)` instead.
+  with torch.cuda.amp.autocast(enabled=False):1:   0%|                                                                                                                                                          | 0/13 [00:00<?, ?it/s]/home/edisondao/projects/11-785/11-785_EfficientAT/models/preprocess.py:56: FutureWarning: `torch.cuda.amp.autocast(args...)` is deprecated. Please use `torch.amp.autocast('cuda', args...)` instead.
+Validating:   0%|                                                                                                                                                                                                | 0/4 [00:00<?, ?it/s]/home/edisondao/projects/11-785/11-785_EfficientAT/models/preprocess.py:56: FutureWarning: `torch.cuda.amp.autocast(args...)` is deprecated. Please use `torch.amp.autocast('cuda', args...)` instead.
+Epoch 51/80: accuracy: 0.9575, val_loss: 0.3287:   0%|                                                                                                                                                          | 0/13 [00:00<?, ?it/s]/home/edisondao/projects/11-785/11-785_EfficientAT/models/preprocess.py:56: FutureWarning: `torch.cuda.amp.autocast(args...)` is deprecated. Please use `torch.amp.autocast('cuda', args...)` instead.
+Epoch 51/80: accuracy: 0.9575, val_loss: 0.3287:  23%|█████████████████████████████████▋                                                                                                                | 3/13 [00:02<00:08,  1.15it/s]/home/edisondao/projects/11-785/11-785_EfficientAT/models/preprocess.py:56: FutureWarning: `torch.cuda.amp.autocast(args...)` is deprecated. Please use `torch.amp.autocast('cuda', args...)` instead.
+Epoch 51/80: accuracy: 0.9575, val_loss: 0.3287:  23%|█████████████████████████████████▋                                                                                                                | 3/13 [00:02<00:08,  1.15it/s]/home/edisondao/projects/11-785/11-785_EfficientAT/models/preprocess.py:56: FutureWarning: `torch.cuda.amp.autocast(args...)` is deprecated. Please use `torch.amp.autocast('cuda', args...)` instead.
+Epoch 51/80: accuracy: 0.9575, val_loss: 0.3287:  23%|█████████████████████████████████▋                                                                                                                | 3/13 [00:02<00:08,  1.15it/s]/home/edisondao/projects/11-785/11-785_EfficientAT/models/preprocess.py:56: FutureWarning: `torch.cuda.amp.autocast(args...)` is deprecated. Please use `torch.amp.autocast('cuda', args...)` instead.
+Epoch 51/80: accuracy: 0.9575, val_loss: 0.3287:  23%|█████████████████████████████████▋                                                                                                                | 3/13 [00:02<00:08,  1.15it/s]/home/edisondao/projects/11-785/11-785_EfficientAT/models/preprocess.py:56: FutureWarning: `torch.cuda.amp.autocast(args...)` is deprecated. Please use `torch.amp.autocast('cuda', args...)` instead.
+Validating: 100%|████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████| 4/4 [00:01<00:00,  2.72it/s]/home/edisondao/projects/11-785/11-785_EfficientAT/models/preprocess.py:56: FutureWarning: `torch.cuda.amp.autocast(args...)` is deprecated. Please use `torch.amp.autocast('cuda', args...)` instead.
+  with torch.cuda.amp.autocast(enabled=False):███████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████| 4/4 [00:01<00:00,  2.72it/s]/home/edisondao/projects/11-785/11-785_EfficientAT/models/preprocess.py:56: FutureWarning: `torch.cuda.amp.autocast(args...)` is deprecated. Please use `torch.amp.autocast('cuda', args...)` instead.
+  with torch.cuda.amp.autocast(enabled=False):███████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████| 4/4 [00:01<00:00,  2.72it/s]/home/edisondao/projects/11-785/11-785_EfficientAT/models/preprocess.py:56: FutureWarning: `torch.cuda.amp.autocast(args...)` is deprecated. Please use `torch.amp.autocast('cuda', args...)` instead.
+  with torch.cuda.amp.autocast(enabled=False):███████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████| 4/4 [00:01<00:00,  2.72it/s]/home/edisondao/projects/11-785/11-785_EfficientAT/models/preprocess.py:56: FutureWarning: `torch.cuda.amp.autocast(args...)` is deprecated. Please use `torch.amp.autocast('cuda', args...)` instead.
+  with torch.cuda.amp.autocast(enabled=False):███████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████| 4/4 [00:01<00:00,  2.72it/s]/home/edisondao/projects/11-785/11-785_EfficientAT/models/preprocess.py:56: FutureWarning: `torch.cuda.amp.autocast(args...)` is deprecated. Please use `torch.amp.autocast('cuda', args...)` instead.
+Validating:   0%|                                                                                                                                                                                                | 0/4 [00:00<?, ?it/s]/home/edisondao/projects/11-785/11-785_EfficientAT/models/preprocess.py:56: FutureWarning: `torch.cuda.amp.autocast(args...)` is deprecated. Please use `torch.amp.autocast('cuda', args...)` instead.
+Epoch 53/80: accuracy: 0.9575, val_loss: 0.3241:   0%|                                                                                                                                                          | 0/13 [00:00<?, ?it/s]/home/edisondao/projects/11-785/11-785_EfficientAT/models/preprocess.py:56: FutureWarning: `torch.cuda.amp.autocast(args...)` is deprecated. Please use `torch.amp.autocast('cuda', args...)` instead.
+  with torch.cuda.amp.autocast(enabled=False):1:   0%|                                                                                                                                                          | 0/13 [00:00<?, ?it/s]/home/edisondao/projects/11-785/11-785_EfficientAT/models/preprocess.py:56: FutureWarning: `torch.cuda.amp.autocast(args...)` is deprecated. Please use `torch.amp.autocast('cuda', args...)` instead.
+  with torch.cuda.amp.autocast(enabled=False):1:   0%|                                                                                                                                                          | 0/13 [00:00<?, ?it/s]/home/edisondao/projects/11-785/11-785_EfficientAT/models/preprocess.py:56: FutureWarning: `torch.cuda.amp.autocast(args...)` is deprecated. Please use `torch.amp.autocast('cuda', args...)` instead.
+  with torch.cuda.amp.autocast(enabled=False):1:   0%|                                                                                                                                                          | 0/13 [00:00<?, ?it/s]/home/edisondao/projects/11-785/11-785_EfficientAT/models/preprocess.py:56: FutureWarning: `torch.cuda.amp.autocast(args...)` is deprecated. Please use `torch.amp.autocast('cuda', args...)` instead.
+  with torch.cuda.amp.autocast(enabled=False):1:   0%|                                                                                                                                                          | 0/13 [00:00<?, ?it/s]/home/edisondao/projects/11-785/11-785_EfficientAT/models/preprocess.py:56: FutureWarning: `torch.cuda.amp.autocast(args...)` is deprecated. Please use `torch.amp.autocast('cuda', args...)` instead.
+Validating:  50%|████████████████████████████████████████████████████████████████████████████████████████████                                                                                            | 2/4 [00:01<00:00,  2.03it/s]/home/edisondao/projects/11-785/11-785_EfficientAT/models/preprocess.py:56: FutureWarning: `torch.cuda.amp.autocast(args...)` is deprecated. Please use `torch.amp.autocast('cuda', args...)` instead.
+Epoch 54/80: accuracy: 0.9575, val_loss: 0.3220:   8%|███████████▏                                                                                                                                      | 1/13 [00:01<00:16,  1.37s/it]/home/edisondao/projects/11-785/11-785_EfficientAT/models/preprocess.py:56: FutureWarning: `torch.cuda.amp.autocast(args...)` is deprecated. Please use `torch.amp.autocast('cuda', args...)` instead.
+Epoch 54/80: accuracy: 0.9575, val_loss: 0.3220:  31%|████████████████████████████████████████████▉                                                                                                     | 4/13 [00:03<00:07,  1.24it/s]/home/edisondao/projects/11-785/11-785_EfficientAT/models/preprocess.py:56: FutureWarning: `torch.cuda.amp.autocast(args...)` is deprecated. Please use `torch.amp.autocast('cuda', args...)` instead.
+Epoch 54/80: accuracy: 0.9575, val_loss: 0.3220:  31%|████████████████████████████████████████████▉                                                                                                     | 4/13 [00:03<00:07,  1.24it/s]/home/edisondao/projects/11-785/11-785_EfficientAT/models/preprocess.py:56: FutureWarning: `torch.cuda.amp.autocast(args...)` is deprecated. Please use `torch.amp.autocast('cuda', args...)` instead.
+Epoch 54/80: accuracy: 0.9575, val_loss: 0.3220:  31%|████████████████████████████████████████████▉                                                                                                     | 4/13 [00:03<00:07,  1.24it/s]/home/edisondao/projects/11-785/11-785_EfficientAT/models/preprocess.py:56: FutureWarning: `torch.cuda.amp.autocast(args...)` is deprecated. Please use `torch.amp.autocast('cuda', args...)` instead.
+Validating:   0%|                                                                                                                                                                                                | 0/4 [00:00<?, ?it/s]/home/edisondao/projects/11-785/11-785_EfficientAT/models/preprocess.py:56: FutureWarning: `torch.cuda.amp.autocast(args...)` is deprecated. Please use `torch.amp.autocast('cuda', args...)` instead.
+Epoch 55/80: accuracy: 0.9575, val_loss: 0.3200:   0%|                                                                                                                                                          | 0/13 [00:00<?, ?it/s]/home/edisondao/projects/11-785/11-785_EfficientAT/models/preprocess.py:56: FutureWarning: `torch.cuda.amp.autocast(args...)` is deprecated. Please use `torch.amp.autocast('cuda', args...)` instead.
+  with torch.cuda.amp.autocast(enabled=False):0:   0%|                                                                                                                                                          | 0/13 [00:00<?, ?it/s]/home/edisondao/projects/11-785/11-785_EfficientAT/models/preprocess.py:56: FutureWarning: `torch.cuda.amp.autocast(args...)` is deprecated. Please use `torch.amp.autocast('cuda', args...)` instead.
+  with torch.cuda.amp.autocast(enabled=False):0:   0%|                                                                                                                                                          | 0/13 [00:00<?, ?it/s]/home/edisondao/projects/11-785/11-785_EfficientAT/models/preprocess.py:56: FutureWarning: `torch.cuda.amp.autocast(args...)` is deprecated. Please use `torch.amp.autocast('cuda', args...)` instead.
+  with torch.cuda.amp.autocast(enabled=False):0:   0%|                                                                                                                                                          | 0/13 [00:00<?, ?it/s]/home/edisondao/projects/11-785/11-785_EfficientAT/models/preprocess.py:56: FutureWarning: `torch.cuda.amp.autocast(args...)` is deprecated. Please use `torch.amp.autocast('cuda', args...)` instead.
+  with torch.cuda.amp.autocast(enabled=False):0:   0%|                                                                                                                                                          | 0/13 [00:00<?, ?it/s]/home/edisondao/projects/11-785/11-785_EfficientAT/models/preprocess.py:56: FutureWarning: `torch.cuda.amp.autocast(args...)` is deprecated. Please use `torch.amp.autocast('cuda', args...)` instead.
+Validating:  25%|██████████████████████████████████████████████                                                                                                                                          | 1/4 [00:00<00:02,  1.22it/s]/home/edisondao/projects/11-785/11-785_EfficientAT/models/preprocess.py:56: FutureWarning: `torch.cuda.amp.autocast(args...)` is deprecated. Please use `torch.amp.autocast('cuda', args...)` instead.
+Epoch 56/80: accuracy: 0.9575, val_loss: 0.3172:   0%|                                                                                                                                                          | 0/13 [00:00<?, ?it/s]/home/edisondao/projects/11-785/11-785_EfficientAT/models/preprocess.py:56: FutureWarning: `torch.cuda.amp.autocast(args...)` is deprecated. Please use `torch.amp.autocast('cuda', args...)` instead.
+Epoch 56/80: accuracy: 0.9575, val_loss: 0.3172:  23%|█████████████████████████████████▋                                                                                                                | 3/13 [00:02<00:08,  1.13it/s]/home/edisondao/projects/11-785/11-785_EfficientAT/models/preprocess.py:56: FutureWarning: `torch.cuda.amp.autocast(args...)` is deprecated. Please use `torch.amp.autocast('cuda', args...)` instead.
+Epoch 56/80: accuracy: 0.9575, val_loss: 0.3172:  23%|█████████████████████████████████▋                                                                                                                | 3/13 [00:02<00:08,  1.13it/s]/home/edisondao/projects/11-785/11-785_EfficientAT/models/preprocess.py:56: FutureWarning: `torch.cuda.amp.autocast(args...)` is deprecated. Please use `torch.amp.autocast('cuda', args...)` instead.
+Epoch 56/80: accuracy: 0.9575, val_loss: 0.3172:  23%|█████████████████████████████████▋                                                                                                                | 3/13 [00:02<00:08,  1.13it/s]/home/edisondao/projects/11-785/11-785_EfficientAT/models/preprocess.py:56: FutureWarning: `torch.cuda.amp.autocast(args...)` is deprecated. Please use `torch.amp.autocast('cuda', args...)` instead.
+Epoch 56/80: accuracy: 0.9575, val_loss: 0.3172:  23%|█████████████████████████████████▋                                                                                                                | 3/13 [00:02<00:08,  1.13it/s]/home/edisondao/projects/11-785/11-785_EfficientAT/models/preprocess.py:56: FutureWarning: `torch.cuda.amp.autocast(args...)` is deprecated. Please use `torch.amp.autocast('cuda', args...)` instead.
+Validating: 100%|████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████| 4/4 [00:01<00:00,  2.66it/s]/home/edisondao/projects/11-785/11-785_EfficientAT/models/preprocess.py:56: FutureWarning: `torch.cuda.amp.autocast(args...)` is deprecated. Please use `torch.amp.autocast('cuda', args...)` instead.
+  with torch.cuda.amp.autocast(enabled=False):███████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████| 4/4 [00:01<00:00,  2.66it/s]/home/edisondao/projects/11-785/11-785_EfficientAT/models/preprocess.py:56: FutureWarning: `torch.cuda.amp.autocast(args...)` is deprecated. Please use `torch.amp.autocast('cuda', args...)` instead.
+  with torch.cuda.amp.autocast(enabled=False):███████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████| 4/4 [00:01<00:00,  2.66it/s]/home/edisondao/projects/11-785/11-785_EfficientAT/models/preprocess.py:56: FutureWarning: `torch.cuda.amp.autocast(args...)` is deprecated. Please use `torch.amp.autocast('cuda', args...)` instead.
+  with torch.cuda.amp.autocast(enabled=False):███████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████| 4/4 [00:01<00:00,  2.66it/s]/home/edisondao/projects/11-785/11-785_EfficientAT/models/preprocess.py:56: FutureWarning: `torch.cuda.amp.autocast(args...)` is deprecated. Please use `torch.amp.autocast('cuda', args...)` instead.
+  with torch.cuda.amp.autocast(enabled=False):███████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████| 4/4 [00:01<00:00,  2.66it/s]/home/edisondao/projects/11-785/11-785_EfficientAT/models/preprocess.py:56: FutureWarning: `torch.cuda.amp.autocast(args...)` is deprecated. Please use `torch.amp.autocast('cuda', args...)` instead.
+Validating:   0%|                                                                                                                                                                                                | 0/4 [00:00<?, ?it/s]/home/edisondao/projects/11-785/11-785_EfficientAT/models/preprocess.py:56: FutureWarning: `torch.cuda.amp.autocast(args...)` is deprecated. Please use `torch.amp.autocast('cuda', args...)` instead.
+Epoch 58/80: accuracy: 0.9575, val_loss: 0.3161:   0%|                                                                                                                                                          | 0/13 [00:00<?, ?it/s]/home/edisondao/projects/11-785/11-785_EfficientAT/models/preprocess.py:56: FutureWarning: `torch.cuda.amp.autocast(args...)` is deprecated. Please use `torch.amp.autocast('cuda', args...)` instead.
+  with torch.cuda.amp.autocast(enabled=False):1:   0%|                                                                                                                                                          | 0/13 [00:00<?, ?it/s]/home/edisondao/projects/11-785/11-785_EfficientAT/models/preprocess.py:56: FutureWarning: `torch.cuda.amp.autocast(args...)` is deprecated. Please use `torch.amp.autocast('cuda', args...)` instead.
+  with torch.cuda.amp.autocast(enabled=False):1:   0%|                                                                                                                                                          | 0/13 [00:00<?, ?it/s]/home/edisondao/projects/11-785/11-785_EfficientAT/models/preprocess.py:56: FutureWarning: `torch.cuda.amp.autocast(args...)` is deprecated. Please use `torch.amp.autocast('cuda', args...)` instead.
+  with torch.cuda.amp.autocast(enabled=False):1:   0%|                                                                                                                                                          | 0/13 [00:00<?, ?it/s]/home/edisondao/projects/11-785/11-785_EfficientAT/models/preprocess.py:56: FutureWarning: `torch.cuda.amp.autocast(args...)` is deprecated. Please use `torch.amp.autocast('cuda', args...)` instead.
+  with torch.cuda.amp.autocast(enabled=False):1:   0%|                                                                                                                                                          | 0/13 [00:00<?, ?it/s]/home/edisondao/projects/11-785/11-785_EfficientAT/models/preprocess.py:56: FutureWarning: `torch.cuda.amp.autocast(args...)` is deprecated. Please use `torch.amp.autocast('cuda', args...)` instead.
+Validating:   0%|                                                                                                                                                                                                | 0/4 [00:00<?, ?it/s]/home/edisondao/projects/11-785/11-785_EfficientAT/models/preprocess.py:56: FutureWarning: `torch.cuda.amp.autocast(args...)` is deprecated. Please use `torch.amp.autocast('cuda', args...)` instead.
+Epoch 59/80: accuracy: 0.9575, val_loss: 0.3133:   0%|                                                                                                                                                          | 0/13 [00:00<?, ?it/s]/home/edisondao/projects/11-785/11-785_EfficientAT/models/preprocess.py:56: FutureWarning: `torch.cuda.amp.autocast(args...)` is deprecated. Please use `torch.amp.autocast('cuda', args...)` instead.
+Epoch 59/80: accuracy: 0.9575, val_loss: 0.3133:  23%|█████████████████████████████████▋                                                                                                                | 3/13 [00:02<00:08,  1.17it/s]/home/edisondao/projects/11-785/11-785_EfficientAT/models/preprocess.py:56: FutureWarning: `torch.cuda.amp.autocast(args...)` is deprecated. Please use `torch.amp.autocast('cuda', args...)` instead.
+Epoch 59/80: accuracy: 0.9575, val_loss: 0.3133:  23%|█████████████████████████████████▋                                                                                                                | 3/13 [00:02<00:08,  1.17it/s]/home/edisondao/projects/11-785/11-785_EfficientAT/models/preprocess.py:56: FutureWarning: `torch.cuda.amp.autocast(args...)` is deprecated. Please use `torch.amp.autocast('cuda', args...)` instead.
+Epoch 59/80: accuracy: 0.9575, val_loss: 0.3133:  23%|█████████████████████████████████▋                                                                                                                | 3/13 [00:02<00:08,  1.17it/s]/home/edisondao/projects/11-785/11-785_EfficientAT/models/preprocess.py:56: FutureWarning: `torch.cuda.amp.autocast(args...)` is deprecated. Please use `torch.amp.autocast('cuda', args...)` instead.
+Epoch 59/80: accuracy: 0.9575, val_loss: 0.3133:  23%|█████████████████████████████████▋                                                                                                                | 3/13 [00:02<00:08,  1.17it/s]/home/edisondao/projects/11-785/11-785_EfficientAT/models/preprocess.py:56: FutureWarning: `torch.cuda.amp.autocast(args...)` is deprecated. Please use `torch.amp.autocast('cuda', args...)` instead.
+Validating: 100%|████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████| 4/4 [00:01<00:00,  2.58it/s]/home/edisondao/projects/11-785/11-785_EfficientAT/models/preprocess.py:56: FutureWarning: `torch.cuda.amp.autocast(args...)` is deprecated. Please use `torch.amp.autocast('cuda', args...)` instead.
+  with torch.cuda.amp.autocast(enabled=False):███████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████| 4/4 [00:01<00:00,  2.58it/s]/home/edisondao/projects/11-785/11-785_EfficientAT/models/preprocess.py:56: FutureWarning: `torch.cuda.amp.autocast(args...)` is deprecated. Please use `torch.amp.autocast('cuda', args...)` instead.
+  with torch.cuda.amp.autocast(enabled=False):███████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████| 4/4 [00:01<00:00,  2.58it/s]/home/edisondao/projects/11-785/11-785_EfficientAT/models/preprocess.py:56: FutureWarning: `torch.cuda.amp.autocast(args...)` is deprecated. Please use `torch.amp.autocast('cuda', args...)` instead.
+  with torch.cuda.amp.autocast(enabled=False):███████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████| 4/4 [00:01<00:00,  2.58it/s]/home/edisondao/projects/11-785/11-785_EfficientAT/models/preprocess.py:56: FutureWarning: `torch.cuda.amp.autocast(args...)` is deprecated. Please use `torch.amp.autocast('cuda', args...)` instead.
+  with torch.cuda.amp.autocast(enabled=False):███████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████| 4/4 [00:01<00:00,  2.58it/s]/home/edisondao/projects/11-785/11-785_EfficientAT/models/preprocess.py:56: FutureWarning: `torch.cuda.amp.autocast(args...)` is deprecated. Please use `torch.amp.autocast('cuda', args...)` instead.
+Validating:   0%|                                                                                                                                                                                                | 0/4 [00:00<?, ?it/s]/home/edisondao/projects/11-785/11-785_EfficientAT/models/preprocess.py:56: FutureWarning: `torch.cuda.amp.autocast(args...)` is deprecated. Please use `torch.amp.autocast('cuda', args...)` instead.
+Epoch 61/80: accuracy: 0.9575, val_loss: 0.3104:   0%|                                                                                                                                                          | 0/13 [00:00<?, ?it/s]/home/edisondao/projects/11-785/11-785_EfficientAT/models/preprocess.py:56: FutureWarning: `torch.cuda.amp.autocast(args...)` is deprecated. Please use `torch.amp.autocast('cuda', args...)` instead.
+  with torch.cuda.amp.autocast(enabled=False):4:   0%|                                                                                                                                                          | 0/13 [00:00<?, ?it/s]/home/edisondao/projects/11-785/11-785_EfficientAT/models/preprocess.py:56: FutureWarning: `torch.cuda.amp.autocast(args...)` is deprecated. Please use `torch.amp.autocast('cuda', args...)` instead.
+  with torch.cuda.amp.autocast(enabled=False):4:   0%|                                                                                                                                                          | 0/13 [00:00<?, ?it/s]/home/edisondao/projects/11-785/11-785_EfficientAT/models/preprocess.py:56: FutureWarning: `torch.cuda.amp.autocast(args...)` is deprecated. Please use `torch.amp.autocast('cuda', args...)` instead.
+  with torch.cuda.amp.autocast(enabled=False):4:   0%|                                                                                                                                                          | 0/13 [00:00<?, ?it/s]/home/edisondao/projects/11-785/11-785_EfficientAT/models/preprocess.py:56: FutureWarning: `torch.cuda.amp.autocast(args...)` is deprecated. Please use `torch.amp.autocast('cuda', args...)` instead.
+  with torch.cuda.amp.autocast(enabled=False):4:   0%|                                                                                                                                                          | 0/13 [00:00<?, ?it/s]/home/edisondao/projects/11-785/11-785_EfficientAT/models/preprocess.py:56: FutureWarning: `torch.cuda.amp.autocast(args...)` is deprecated. Please use `torch.amp.autocast('cuda', args...)` instead.
+Validating:   0%|                                                                                                                                                                                                | 0/4 [00:00<?, ?it/s]/home/edisondao/projects/11-785/11-785_EfficientAT/models/preprocess.py:56: FutureWarning: `torch.cuda.amp.autocast(args...)` is deprecated. Please use `torch.amp.autocast('cuda', args...)` instead.
+Epoch 62/80: accuracy: 0.9575, val_loss: 0.3096:   0%|                                                                                                                                                          | 0/13 [00:00<?, ?it/s]/home/edisondao/projects/11-785/11-785_EfficientAT/models/preprocess.py:56: FutureWarning: `torch.cuda.amp.autocast(args...)` is deprecated. Please use `torch.amp.autocast('cuda', args...)` instead.
+  with torch.cuda.amp.autocast(enabled=False):6:   0%|                                                                                                                                                          | 0/13 [00:00<?, ?it/s]/home/edisondao/projects/11-785/11-785_EfficientAT/models/preprocess.py:56: FutureWarning: `torch.cuda.amp.autocast(args...)` is deprecated. Please use `torch.amp.autocast('cuda', args...)` instead.
+  with torch.cuda.amp.autocast(enabled=False):6:   0%|                                                                                                                                                          | 0/13 [00:00<?, ?it/s]/home/edisondao/projects/11-785/11-785_EfficientAT/models/preprocess.py:56: FutureWarning: `torch.cuda.amp.autocast(args...)` is deprecated. Please use `torch.amp.autocast('cuda', args...)` instead.
+  with torch.cuda.amp.autocast(enabled=False):6:   0%|                                                                                                                                                          | 0/13 [00:00<?, ?it/s]/home/edisondao/projects/11-785/11-785_EfficientAT/models/preprocess.py:56: FutureWarning: `torch.cuda.amp.autocast(args...)` is deprecated. Please use `torch.amp.autocast('cuda', args...)` instead.
+  with torch.cuda.amp.autocast(enabled=False):6:   0%|                                                                                                                                                          | 0/13 [00:00<?, ?it/s]/home/edisondao/projects/11-785/11-785_EfficientAT/models/preprocess.py:56: FutureWarning: `torch.cuda.amp.autocast(args...)` is deprecated. Please use `torch.amp.autocast('cuda', args...)` instead.
+Validating:  25%|██████████████████████████████████████████████                                                                                                                                          | 1/4 [00:00<00:02,  1.10it/s]/home/edisondao/projects/11-785/11-785_EfficientAT/models/preprocess.py:56: FutureWarning: `torch.cuda.amp.autocast(args...)` is deprecated. Please use `torch.amp.autocast('cuda', args...)` instead.
+Epoch 63/80: accuracy: 0.9575, val_loss: 0.3076:   0%|                                                                                                                                                          | 0/13 [00:00<?, ?it/s]/home/edisondao/projects/11-785/11-785_EfficientAT/models/preprocess.py:56: FutureWarning: `torch.cuda.amp.autocast(args...)` is deprecated. Please use `torch.amp.autocast('cuda', args...)` instead.
+Epoch 63/80: accuracy: 0.9575, val_loss: 0.3076:  23%|█████████████████████████████████▋                                                                                                                | 3/13 [00:02<00:08,  1.15it/s]/home/edisondao/projects/11-785/11-785_EfficientAT/models/preprocess.py:56: FutureWarning: `torch.cuda.amp.autocast(args...)` is deprecated. Please use `torch.amp.autocast('cuda', args...)` instead.
+Epoch 63/80: accuracy: 0.9575, val_loss: 0.3076:  23%|█████████████████████████████████▋                                                                                                                | 3/13 [00:02<00:08,  1.15it/s]/home/edisondao/projects/11-785/11-785_EfficientAT/models/preprocess.py:56: FutureWarning: `torch.cuda.amp.autocast(args...)` is deprecated. Please use `torch.amp.autocast('cuda', args...)` instead.
+Epoch 63/80: accuracy: 0.9575, val_loss: 0.3076:  23%|█████████████████████████████████▋                                                                                                                | 3/13 [00:02<00:08,  1.15it/s]/home/edisondao/projects/11-785/11-785_EfficientAT/models/preprocess.py:56: FutureWarning: `torch.cuda.amp.autocast(args...)` is deprecated. Please use `torch.amp.autocast('cuda', args...)` instead.
+Epoch 63/80: accuracy: 0.9575, val_loss: 0.3076:  23%|█████████████████████████████████▋                                                                                                                | 3/13 [00:02<00:08,  1.15it/s]/home/edisondao/projects/11-785/11-785_EfficientAT/models/preprocess.py:56: FutureWarning: `torch.cuda.amp.autocast(args...)` is deprecated. Please use `torch.amp.autocast('cuda', args...)` instead.
+Validating:  75%|██████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████                                              | 3/4 [00:01<00:00,  2.51it/s]/home/edisondao/projects/11-785/11-785_EfficientAT/models/preprocess.py:56: FutureWarning: `torch.cuda.amp.autocast(args...)` is deprecated. Please use `torch.amp.autocast('cuda', args...)` instead.
+Epoch 64/80: accuracy: 0.9575, val_loss: 0.3055:   8%|███████████▏                                                                                                                                      | 1/13 [00:01<00:20,  1.70s/it]/home/edisondao/projects/11-785/11-785_EfficientAT/models/preprocess.py:56: FutureWarning: `torch.cuda.amp.autocast(args...)` is deprecated. Please use `torch.amp.autocast('cuda', args...)` instead.
+Epoch 64/80: accuracy: 0.9575, val_loss: 0.3055:  31%|████████████████████████████████████████████▉                                                                                                     | 4/13 [00:03<00:07,  1.24it/s]/home/edisondao/projects/11-785/11-785_EfficientAT/models/preprocess.py:56: FutureWarning: `torch.cuda.amp.autocast(args...)` is deprecated. Please use `torch.amp.autocast('cuda', args...)` instead.
+Epoch 64/80: accuracy: 0.9575, val_loss: 0.3055:  31%|████████████████████████████████████████████▉                                                                                                     | 4/13 [00:03<00:07,  1.24it/s]/home/edisondao/projects/11-785/11-785_EfficientAT/models/preprocess.py:56: FutureWarning: `torch.cuda.amp.autocast(args...)` is deprecated. Please use `torch.amp.autocast('cuda', args...)` instead.
+Epoch 64/80: accuracy: 0.9575, val_loss: 0.3055:  31%|████████████████████████████████████████████▉                                                                                                     | 4/13 [00:03<00:07,  1.24it/s]/home/edisondao/projects/11-785/11-785_EfficientAT/models/preprocess.py:56: FutureWarning: `torch.cuda.amp.autocast(args...)` is deprecated. Please use `torch.amp.autocast('cuda', args...)` instead.
+Epoch 64/80: accuracy: 0.9575, val_loss: 0.3055:  31%|████████████████████████████████████████████▉                                                                                                     | 4/13 [00:03<00:07,  1.24it/s]/home/edisondao/projects/11-785/11-785_EfficientAT/models/preprocess.py:56: FutureWarning: `torch.cuda.amp.autocast(args...)` is deprecated. Please use `torch.amp.autocast('cuda', args...)` instead.
+Validating: 100%|████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████| 4/4 [00:01<00:00,  2.73it/s]/home/edisondao/projects/11-785/11-785_EfficientAT/models/preprocess.py:56: FutureWarning: `torch.cuda.amp.autocast(args...)` is deprecated. Please use `torch.amp.autocast('cuda', args...)` instead.
+  with torch.cuda.amp.autocast(enabled=False):███████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████| 4/4 [00:01<00:00,  2.73it/s]/home/edisondao/projects/11-785/11-785_EfficientAT/models/preprocess.py:56: FutureWarning: `torch.cuda.amp.autocast(args...)` is deprecated. Please use `torch.amp.autocast('cuda', args...)` instead.
+  with torch.cuda.amp.autocast(enabled=False):███████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████| 4/4 [00:01<00:00,  2.73it/s]/home/edisondao/projects/11-785/11-785_EfficientAT/models/preprocess.py:56: FutureWarning: `torch.cuda.amp.autocast(args...)` is deprecated. Please use `torch.amp.autocast('cuda', args...)` instead.
+  with torch.cuda.amp.autocast(enabled=False):███████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████| 4/4 [00:01<00:00,  2.73it/s]/home/edisondao/projects/11-785/11-785_EfficientAT/models/preprocess.py:56: FutureWarning: `torch.cuda.amp.autocast(args...)` is deprecated. Please use `torch.amp.autocast('cuda', args...)` instead.
+  with torch.cuda.amp.autocast(enabled=False):███████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████| 4/4 [00:01<00:00,  2.73it/s]/home/edisondao/projects/11-785/11-785_EfficientAT/models/preprocess.py:56: FutureWarning: `torch.cuda.amp.autocast(args...)` is deprecated. Please use `torch.amp.autocast('cuda', args...)` instead.
+Validating:   0%|                                                                                                                                                                                                | 0/4 [00:00<?, ?it/s]/home/edisondao/projects/11-785/11-785_EfficientAT/models/preprocess.py:56: FutureWarning: `torch.cuda.amp.autocast(args...)` is deprecated. Please use `torch.amp.autocast('cuda', args...)` instead.
+Epoch 66/80: accuracy: 0.9600, val_loss: 0.3033:   0%|                                                                                                                                                          | 0/13 [00:00<?, ?it/s]/home/edisondao/projects/11-785/11-785_EfficientAT/models/preprocess.py:56: FutureWarning: `torch.cuda.amp.autocast(args...)` is deprecated. Please use `torch.amp.autocast('cuda', args...)` instead.
+  with torch.cuda.amp.autocast(enabled=False):3:   0%|                                                                                                                                                          | 0/13 [00:00<?, ?it/s]/home/edisondao/projects/11-785/11-785_EfficientAT/models/preprocess.py:56: FutureWarning: `torch.cuda.amp.autocast(args...)` is deprecated. Please use `torch.amp.autocast('cuda', args...)` instead.
+  with torch.cuda.amp.autocast(enabled=False):3:   0%|                                                                                                                                                          | 0/13 [00:00<?, ?it/s]/home/edisondao/projects/11-785/11-785_EfficientAT/models/preprocess.py:56: FutureWarning: `torch.cuda.amp.autocast(args...)` is deprecated. Please use `torch.amp.autocast('cuda', args...)` instead.
+  with torch.cuda.amp.autocast(enabled=False):3:   0%|                                                                                                                                                          | 0/13 [00:00<?, ?it/s]/home/edisondao/projects/11-785/11-785_EfficientAT/models/preprocess.py:56: FutureWarning: `torch.cuda.amp.autocast(args...)` is deprecated. Please use `torch.amp.autocast('cuda', args...)` instead.
+  with torch.cuda.amp.autocast(enabled=False):3:   0%|                                                                                                                                                          | 0/13 [00:00<?, ?it/s]/home/edisondao/projects/11-785/11-785_EfficientAT/models/preprocess.py:56: FutureWarning: `torch.cuda.amp.autocast(args...)` is deprecated. Please use `torch.amp.autocast('cuda', args...)` instead.
+Validating:   0%|                                                                                                                                                                                                | 0/4 [00:00<?, ?it/s]/home/edisondao/projects/11-785/11-785_EfficientAT/models/preprocess.py:56: FutureWarning: `torch.cuda.amp.autocast(args...)` is deprecated. Please use `torch.amp.autocast('cuda', args...)` instead.
+Epoch 67/80: accuracy: 0.9575, val_loss: 0.3037:   0%|                                                                                                                                                          | 0/13 [00:00<?, ?it/s]/home/edisondao/projects/11-785/11-785_EfficientAT/models/preprocess.py:56: FutureWarning: `torch.cuda.amp.autocast(args...)` is deprecated. Please use `torch.amp.autocast('cuda', args...)` instead.
+  with torch.cuda.amp.autocast(enabled=False):7:   0%|                                                                                                                                                          | 0/13 [00:00<?, ?it/s]/home/edisondao/projects/11-785/11-785_EfficientAT/models/preprocess.py:56: FutureWarning: `torch.cuda.amp.autocast(args...)` is deprecated. Please use `torch.amp.autocast('cuda', args...)` instead.
+  with torch.cuda.amp.autocast(enabled=False):7:   0%|                                                                                                                                                          | 0/13 [00:00<?, ?it/s]/home/edisondao/projects/11-785/11-785_EfficientAT/models/preprocess.py:56: FutureWarning: `torch.cuda.amp.autocast(args...)` is deprecated. Please use `torch.amp.autocast('cuda', args...)` instead.
+  with torch.cuda.amp.autocast(enabled=False):7:   0%|                                                                                                                                                          | 0/13 [00:00<?, ?it/s]/home/edisondao/projects/11-785/11-785_EfficientAT/models/preprocess.py:56: FutureWarning: `torch.cuda.amp.autocast(args...)` is deprecated. Please use `torch.amp.autocast('cuda', args...)` instead.
+  with torch.cuda.amp.autocast(enabled=False):7:   0%|                                                                                                                                                          | 0/13 [00:00<?, ?it/s]/home/edisondao/projects/11-785/11-785_EfficientAT/models/preprocess.py:56: FutureWarning: `torch.cuda.amp.autocast(args...)` is deprecated. Please use `torch.amp.autocast('cuda', args...)` instead.
+Validating:   0%|                                                                                                                                                                                                | 0/4 [00:00<?, ?it/s]/home/edisondao/projects/11-785/11-785_EfficientAT/models/preprocess.py:56: FutureWarning: `torch.cuda.amp.autocast(args...)` is deprecated. Please use `torch.amp.autocast('cuda', args...)` instead.
+Epoch 68/80: accuracy: 0.9575, val_loss: 0.3037:   0%|                                                                                                                                                          | 0/13 [00:00<?, ?it/s]/home/edisondao/projects/11-785/11-785_EfficientAT/models/preprocess.py:56: FutureWarning: `torch.cuda.amp.autocast(args...)` is deprecated. Please use `torch.amp.autocast('cuda', args...)` instead.
+  with torch.cuda.amp.autocast(enabled=False):7:   0%|                                                                                                                                                          | 0/13 [00:00<?, ?it/s]/home/edisondao/projects/11-785/11-785_EfficientAT/models/preprocess.py:56: FutureWarning: `torch.cuda.amp.autocast(args...)` is deprecated. Please use `torch.amp.autocast('cuda', args...)` instead.
+  with torch.cuda.amp.autocast(enabled=False):7:   0%|                                                                                                                                                          | 0/13 [00:00<?, ?it/s]/home/edisondao/projects/11-785/11-785_EfficientAT/models/preprocess.py:56: FutureWarning: `torch.cuda.amp.autocast(args...)` is deprecated. Please use `torch.amp.autocast('cuda', args...)` instead.
+  with torch.cuda.amp.autocast(enabled=False):7:   0%|                                                                                                                                                          | 0/13 [00:00<?, ?it/s]/home/edisondao/projects/11-785/11-785_EfficientAT/models/preprocess.py:56: FutureWarning: `torch.cuda.amp.autocast(args...)` is deprecated. Please use `torch.amp.autocast('cuda', args...)` instead.
+  with torch.cuda.amp.autocast(enabled=False):7:   0%|                                                                                                                                                          | 0/13 [00:00<?, ?it/s]/home/edisondao/projects/11-785/11-785_EfficientAT/models/preprocess.py:56: FutureWarning: `torch.cuda.amp.autocast(args...)` is deprecated. Please use `torch.amp.autocast('cuda', args...)` instead.
+Validating:  25%|██████████████████████████████████████████████                                                                                                                                          | 1/4 [00:00<00:02,  1.11it/s]/home/edisondao/projects/11-785/11-785_EfficientAT/models/preprocess.py:56: FutureWarning: `torch.cuda.amp.autocast(args...)` is deprecated. Please use `torch.amp.autocast('cuda', args...)` instead.
+Epoch 69/80: accuracy: 0.9550, val_loss: 0.3037:   0%|                                                                                                                                                          | 0/13 [00:00<?, ?it/s]/home/edisondao/projects/11-785/11-785_EfficientAT/models/preprocess.py:56: FutureWarning: `torch.cuda.amp.autocast(args...)` is deprecated. Please use `torch.amp.autocast('cuda', args...)` instead.
+Epoch 69/80: accuracy: 0.9550, val_loss: 0.3037:  23%|█████████████████████████████████▋                                                                                                                | 3/13 [00:03<00:10,  1.01s/it]/home/edisondao/projects/11-785/11-785_EfficientAT/models/preprocess.py:56: FutureWarning: `torch.cuda.amp.autocast(args...)` is deprecated. Please use `torch.amp.autocast('cuda', args...)` instead.
+Epoch 69/80: accuracy: 0.9550, val_loss: 0.3037:  23%|█████████████████████████████████▋                                                                                                                | 3/13 [00:03<00:10,  1.01s/it]/home/edisondao/projects/11-785/11-785_EfficientAT/models/preprocess.py:56: FutureWarning: `torch.cuda.amp.autocast(args...)` is deprecated. Please use `torch.amp.autocast('cuda', args...)` instead.
+Epoch 69/80: accuracy: 0.9550, val_loss: 0.3037:  23%|█████████████████████████████████▋                                                                                                                | 3/13 [00:03<00:10,  1.01s/it]/home/edisondao/projects/11-785/11-785_EfficientAT/models/preprocess.py:56: FutureWarning: `torch.cuda.amp.autocast(args...)` is deprecated. Please use `torch.amp.autocast('cuda', args...)` instead.
+Epoch 69/80: accuracy: 0.9550, val_loss: 0.3037:  23%|█████████████████████████████████▋                                                                                                                | 3/13 [00:03<00:10,  1.01s/it]/home/edisondao/projects/11-785/11-785_EfficientAT/models/preprocess.py:56: FutureWarning: `torch.cuda.amp.autocast(args...)` is deprecated. Please use `torch.amp.autocast('cuda', args...)` instead.
+Validating: 100%|████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████| 4/4 [00:01<00:00,  2.73it/s]/home/edisondao/projects/11-785/11-785_EfficientAT/models/preprocess.py:56: FutureWarning: `torch.cuda.amp.autocast(args...)` is deprecated. Please use `torch.amp.autocast('cuda', args...)` instead.
+  with torch.cuda.amp.autocast(enabled=False):███████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████| 4/4 [00:01<00:00,  2.73it/s]/home/edisondao/projects/11-785/11-785_EfficientAT/models/preprocess.py:56: FutureWarning: `torch.cuda.amp.autocast(args...)` is deprecated. Please use `torch.amp.autocast('cuda', args...)` instead.
+  with torch.cuda.amp.autocast(enabled=False):███████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████| 4/4 [00:01<00:00,  2.73it/s]/home/edisondao/projects/11-785/11-785_EfficientAT/models/preprocess.py:56: FutureWarning: `torch.cuda.amp.autocast(args...)` is deprecated. Please use `torch.amp.autocast('cuda', args...)` instead.
+  with torch.cuda.amp.autocast(enabled=False):███████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████| 4/4 [00:01<00:00,  2.73it/s]/home/edisondao/projects/11-785/11-785_EfficientAT/models/preprocess.py:56: FutureWarning: `torch.cuda.amp.autocast(args...)` is deprecated. Please use `torch.amp.autocast('cuda', args...)` instead.
+  with torch.cuda.amp.autocast(enabled=False):███████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████| 4/4 [00:01<00:00,  2.73it/s]/home/edisondao/projects/11-785/11-785_EfficientAT/models/preprocess.py:56: FutureWarning: `torch.cuda.amp.autocast(args...)` is deprecated. Please use `torch.amp.autocast('cuda', args...)` instead.
+Validating:   0%|                                                                                                                                                                                                | 0/4 [00:00<?, ?it/s]/home/edisondao/projects/11-785/11-785_EfficientAT/models/preprocess.py:56: FutureWarning: `torch.cuda.amp.autocast(args...)` is deprecated. Please use `torch.amp.autocast('cuda', args...)` instead.
+Epoch 71/80: accuracy: 0.9575, val_loss: 0.3028:   0%|                                                                                                                                                          | 0/13 [00:00<?, ?it/s]/home/edisondao/projects/11-785/11-785_EfficientAT/models/preprocess.py:56: FutureWarning: `torch.cuda.amp.autocast(args...)` is deprecated. Please use `torch.amp.autocast('cuda', args...)` instead.
+  with torch.cuda.amp.autocast(enabled=False):8:   0%|                                                                                                                                                          | 0/13 [00:00<?, ?it/s]/home/edisondao/projects/11-785/11-785_EfficientAT/models/preprocess.py:56: FutureWarning: `torch.cuda.amp.autocast(args...)` is deprecated. Please use `torch.amp.autocast('cuda', args...)` instead.
+  with torch.cuda.amp.autocast(enabled=False):8:   0%|                                                                                                                                                          | 0/13 [00:00<?, ?it/s]/home/edisondao/projects/11-785/11-785_EfficientAT/models/preprocess.py:56: FutureWarning: `torch.cuda.amp.autocast(args...)` is deprecated. Please use `torch.amp.autocast('cuda', args...)` instead.
+  with torch.cuda.amp.autocast(enabled=False):8:   0%|                                                                                                                                                          | 0/13 [00:00<?, ?it/s]/home/edisondao/projects/11-785/11-785_EfficientAT/models/preprocess.py:56: FutureWarning: `torch.cuda.amp.autocast(args...)` is deprecated. Please use `torch.amp.autocast('cuda', args...)` instead.
+  with torch.cuda.amp.autocast(enabled=False):8:   0%|                                                                                                                                                          | 0/13 [00:00<?, ?it/s]/home/edisondao/projects/11-785/11-785_EfficientAT/models/preprocess.py:56: FutureWarning: `torch.cuda.amp.autocast(args...)` is deprecated. Please use `torch.amp.autocast('cuda', args...)` instead.
+Validating:   0%|                                                                                                                                                                                                | 0/4 [00:00<?, ?it/s]/home/edisondao/projects/11-785/11-785_EfficientAT/models/preprocess.py:56: FutureWarning: `torch.cuda.amp.autocast(args...)` is deprecated. Please use `torch.amp.autocast('cuda', args...)` instead.
+Epoch 72/80: accuracy: 0.9575, val_loss: 0.3030:   0%|                                                                                                                                                          | 0/13 [00:00<?, ?it/s]/home/edisondao/projects/11-785/11-785_EfficientAT/models/preprocess.py:56: FutureWarning: `torch.cuda.amp.autocast(args...)` is deprecated. Please use `torch.amp.autocast('cuda', args...)` instead.
+  with torch.cuda.amp.autocast(enabled=False):0:   0%|                                                                                                                                                          | 0/13 [00:00<?, ?it/s]/home/edisondao/projects/11-785/11-785_EfficientAT/models/preprocess.py:56: FutureWarning: `torch.cuda.amp.autocast(args...)` is deprecated. Please use `torch.amp.autocast('cuda', args...)` instead.
+  with torch.cuda.amp.autocast(enabled=False):0:   0%|                                                                                                                                                          | 0/13 [00:00<?, ?it/s]/home/edisondao/projects/11-785/11-785_EfficientAT/models/preprocess.py:56: FutureWarning: `torch.cuda.amp.autocast(args...)` is deprecated. Please use `torch.amp.autocast('cuda', args...)` instead.
+  with torch.cuda.amp.autocast(enabled=False):0:   0%|                                                                                                                                                          | 0/13 [00:00<?, ?it/s]/home/edisondao/projects/11-785/11-785_EfficientAT/models/preprocess.py:56: FutureWarning: `torch.cuda.amp.autocast(args...)` is deprecated. Please use `torch.amp.autocast('cuda', args...)` instead.
+  with torch.cuda.amp.autocast(enabled=False):0:   0%|                                                                                                                                                          | 0/13 [00:00<?, ?it/s]/home/edisondao/projects/11-785/11-785_EfficientAT/models/preprocess.py:56: FutureWarning: `torch.cuda.amp.autocast(args...)` is deprecated. Please use `torch.amp.autocast('cuda', args...)` instead.
+Validating:  75%|██████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████                                              | 3/4 [00:01<00:00,  2.32it/s]/home/edisondao/projects/11-785/11-785_EfficientAT/models/preprocess.py:56: FutureWarning: `torch.cuda.amp.autocast(args...)` is deprecated. Please use `torch.amp.autocast('cuda', args...)` instead.
+Epoch 73/80: accuracy: 0.9575, val_loss: 0.3023:   8%|███████████▏                                                                                                                                      | 1/13 [00:01<00:17,  1.49s/it]/home/edisondao/projects/11-785/11-785_EfficientAT/models/preprocess.py:56: FutureWarning: `torch.cuda.amp.autocast(args...)` is deprecated. Please use `torch.amp.autocast('cuda', args...)` instead.
+Epoch 73/80: accuracy: 0.9575, val_loss: 0.3023:  31%|████████████████████████████████████████████▉                                                                                                     | 4/13 [00:03<00:07,  1.20it/s]/home/edisondao/projects/11-785/11-785_EfficientAT/models/preprocess.py:56: FutureWarning: `torch.cuda.amp.autocast(args...)` is deprecated. Please use `torch.amp.autocast('cuda', args...)` instead.
+Epoch 73/80: accuracy: 0.9575, val_loss: 0.3023:  31%|████████████████████████████████████████████▉                                                                                                     | 4/13 [00:03<00:07,  1.20it/s]/home/edisondao/projects/11-785/11-785_EfficientAT/models/preprocess.py:56: FutureWarning: `torch.cuda.amp.autocast(args...)` is deprecated. Please use `torch.amp.autocast('cuda', args...)` instead.
+Epoch 73/80: accuracy: 0.9575, val_loss: 0.3023:  31%|████████████████████████████████████████████▉                                                                                                     | 4/13 [00:03<00:07,  1.20it/s]/home/edisondao/projects/11-785/11-785_EfficientAT/models/preprocess.py:56: FutureWarning: `torch.cuda.amp.autocast(args...)` is deprecated. Please use `torch.amp.autocast('cuda', args...)` instead.
+Validating:   0%|                                                                                                                                                                                                | 0/4 [00:00<?, ?it/s]/home/edisondao/projects/11-785/11-785_EfficientAT/models/preprocess.py:56: FutureWarning: `torch.cuda.amp.autocast(args...)` is deprecated. Please use `torch.amp.autocast('cuda', args...)` instead.
+Epoch 74/80: accuracy: 0.9575, val_loss: 0.3022:   0%|                                                                                                                                                          | 0/13 [00:00<?, ?it/s]/home/edisondao/projects/11-785/11-785_EfficientAT/models/preprocess.py:56: FutureWarning: `torch.cuda.amp.autocast(args...)` is deprecated. Please use `torch.amp.autocast('cuda', args...)` instead.
+  with torch.cuda.amp.autocast(enabled=False):2:   0%|                                                                                                                                                          | 0/13 [00:00<?, ?it/s]/home/edisondao/projects/11-785/11-785_EfficientAT/models/preprocess.py:56: FutureWarning: `torch.cuda.amp.autocast(args...)` is deprecated. Please use `torch.amp.autocast('cuda', args...)` instead.
+  with torch.cuda.amp.autocast(enabled=False):2:   0%|                                                                                                                                                          | 0/13 [00:00<?, ?it/s]/home/edisondao/projects/11-785/11-785_EfficientAT/models/preprocess.py:56: FutureWarning: `torch.cuda.amp.autocast(args...)` is deprecated. Please use `torch.amp.autocast('cuda', args...)` instead.
+  with torch.cuda.amp.autocast(enabled=False):2:   0%|                                                                                                                                                          | 0/13 [00:00<?, ?it/s]/home/edisondao/projects/11-785/11-785_EfficientAT/models/preprocess.py:56: FutureWarning: `torch.cuda.amp.autocast(args...)` is deprecated. Please use `torch.amp.autocast('cuda', args...)` instead.
+  with torch.cuda.amp.autocast(enabled=False):2:   0%|                                                                                                                                                          | 0/13 [00:00<?, ?it/s]/home/edisondao/projects/11-785/11-785_EfficientAT/models/preprocess.py:56: FutureWarning: `torch.cuda.amp.autocast(args...)` is deprecated. Please use `torch.amp.autocast('cuda', args...)` instead.
+Validating:   0%|                                                                                                                                                                                                | 0/4 [00:00<?, ?it/s]/home/edisondao/projects/11-785/11-785_EfficientAT/models/preprocess.py:56: FutureWarning: `torch.cuda.amp.autocast(args...)` is deprecated. Please use `torch.amp.autocast('cuda', args...)` instead.
+Epoch 75/80: accuracy: 0.9575, val_loss: 0.3023:   0%|                                                                                                                                                          | 0/13 [00:00<?, ?it/s]/home/edisondao/projects/11-785/11-785_EfficientAT/models/preprocess.py:56: FutureWarning: `torch.cuda.amp.autocast(args...)` is deprecated. Please use `torch.amp.autocast('cuda', args...)` instead.
+Epoch 75/80: accuracy: 0.9575, val_loss: 0.3023:  23%|█████████████████████████████████▋                                                                                                                | 3/13 [00:03<00:09,  1.10it/s]/home/edisondao/projects/11-785/11-785_EfficientAT/models/preprocess.py:56: FutureWarning: `torch.cuda.amp.autocast(args...)` is deprecated. Please use `torch.amp.autocast('cuda', args...)` instead.
+Epoch 75/80: accuracy: 0.9575, val_loss: 0.3023:  23%|█████████████████████████████████▋                                                                                                                | 3/13 [00:03<00:09,  1.10it/s]/home/edisondao/projects/11-785/11-785_EfficientAT/models/preprocess.py:56: FutureWarning: `torch.cuda.amp.autocast(args...)` is deprecated. Please use `torch.amp.autocast('cuda', args...)` instead.
+Epoch 75/80: accuracy: 0.9575, val_loss: 0.3023:  23%|█████████████████████████████████▋                                                                                                                | 3/13 [00:03<00:09,  1.10it/s]/home/edisondao/projects/11-785/11-785_EfficientAT/models/preprocess.py:56: FutureWarning: `torch.cuda.amp.autocast(args...)` is deprecated. Please use `torch.amp.autocast('cuda', args...)` instead.
+Epoch 75/80: accuracy: 0.9575, val_loss: 0.3023:  23%|█████████████████████████████████▋                                                                                                                | 3/13 [00:03<00:09,  1.10it/s]/home/edisondao/projects/11-785/11-785_EfficientAT/models/preprocess.py:56: FutureWarning: `torch.cuda.amp.autocast(args...)` is deprecated. Please use `torch.amp.autocast('cuda', args...)` instead.
+Validating:  25%|██████████████████████████████████████████████                                                                                                                                          | 1/4 [00:01<00:03,  1.05s/it]/home/edisondao/projects/11-785/11-785_EfficientAT/models/preprocess.py:56: FutureWarning: `torch.cuda.amp.autocast(args...)` is deprecated. Please use `torch.amp.autocast('cuda', args...)` instead.
+Epoch 76/80: accuracy: 0.9575, val_loss: 0.3024:   0%|                                                                                                                                                          | 0/13 [00:00<?, ?it/s]/home/edisondao/projects/11-785/11-785_EfficientAT/models/preprocess.py:56: FutureWarning: `torch.cuda.amp.autocast(args...)` is deprecated. Please use `torch.amp.autocast('cuda', args...)` instead.
+Epoch 76/80: accuracy: 0.9575, val_loss: 0.3024:  23%|█████████████████████████████████▋                                                                                                                | 3/13 [00:02<00:08,  1.11it/s]/home/edisondao/projects/11-785/11-785_EfficientAT/models/preprocess.py:56: FutureWarning: `torch.cuda.amp.autocast(args...)` is deprecated. Please use `torch.amp.autocast('cuda', args...)` instead.
+Epoch 76/80: accuracy: 0.9575, val_loss: 0.3024:  23%|█████████████████████████████████▋                                                                                                                | 3/13 [00:02<00:08,  1.11it/s]/home/edisondao/projects/11-785/11-785_EfficientAT/models/preprocess.py:56: FutureWarning: `torch.cuda.amp.autocast(args...)` is deprecated. Please use `torch.amp.autocast('cuda', args...)` instead.
+Epoch 76/80: accuracy: 0.9575, val_loss: 0.3024:  23%|█████████████████████████████████▋                                                                                                                | 3/13 [00:02<00:08,  1.11it/s]/home/edisondao/projects/11-785/11-785_EfficientAT/models/preprocess.py:56: FutureWarning: `torch.cuda.amp.autocast(args...)` is deprecated. Please use `torch.amp.autocast('cuda', args...)` instead.
+Epoch 76/80: accuracy: 0.9575, val_loss: 0.3024:  23%|█████████████████████████████████▋                                                                                                                | 3/13 [00:02<00:08,  1.11it/s]/home/edisondao/projects/11-785/11-785_EfficientAT/models/preprocess.py:56: FutureWarning: `torch.cuda.amp.autocast(args...)` is deprecated. Please use `torch.amp.autocast('cuda', args...)` instead.
+Validating:  50%|████████████████████████████████████████████████████████████████████████████████████████████                                                                                            | 2/4 [00:01<00:01,  1.95it/s]/home/edisondao/projects/11-785/11-785_EfficientAT/models/preprocess.py:56: FutureWarning: `torch.cuda.amp.autocast(args...)` is deprecated. Please use `torch.amp.autocast('cuda', args...)` instead.
+Epoch 77/80: accuracy: 0.9575, val_loss: 0.3023:   0%|                                                                                                                                                          | 0/13 [00:00<?, ?it/s]/home/edisondao/projects/11-785/11-785_EfficientAT/models/preprocess.py:56: FutureWarning: `torch.cuda.amp.autocast(args...)` is deprecated. Please use `torch.amp.autocast('cuda', args...)` instead.
+Epoch 77/80: accuracy: 0.9575, val_loss: 0.3023:  23%|█████████████████████████████████▋                                                                                                                | 3/13 [00:02<00:08,  1.23it/s]/home/edisondao/projects/11-785/11-785_EfficientAT/models/preprocess.py:56: FutureWarning: `torch.cuda.amp.autocast(args...)` is deprecated. Please use `torch.amp.autocast('cuda', args...)` instead.
+Epoch 77/80: accuracy: 0.9575, val_loss: 0.3023:  23%|█████████████████████████████████▋                                                                                                                | 3/13 [00:02<00:08,  1.23it/s]/home/edisondao/projects/11-785/11-785_EfficientAT/models/preprocess.py:56: FutureWarning: `torch.cuda.amp.autocast(args...)` is deprecated. Please use `torch.amp.autocast('cuda', args...)` instead.
+Epoch 77/80: accuracy: 0.9575, val_loss: 0.3023:  23%|█████████████████████████████████▋                                                                                                                | 3/13 [00:02<00:08,  1.23it/s]/home/edisondao/projects/11-785/11-785_EfficientAT/models/preprocess.py:56: FutureWarning: `torch.cuda.amp.autocast(args...)` is deprecated. Please use `torch.amp.autocast('cuda', args...)` instead.
+Epoch 77/80: accuracy: 0.9575, val_loss: 0.3023:  23%|█████████████████████████████████▋                                                                                                                | 3/13 [00:02<00:08,  1.23it/s]/home/edisondao/projects/11-785/11-785_EfficientAT/models/preprocess.py:56: FutureWarning: `torch.cuda.amp.autocast(args...)` is deprecated. Please use `torch.amp.autocast('cuda', args...)` instead.
+Validating: 100%|████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████| 4/4 [00:01<00:00,  2.58it/s]/home/edisondao/projects/11-785/11-785_EfficientAT/models/preprocess.py:56: FutureWarning: `torch.cuda.amp.autocast(args...)` is deprecated. Please use `torch.amp.autocast('cuda', args...)` instead.
+  with torch.cuda.amp.autocast(enabled=False):███████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████| 4/4 [00:01<00:00,  2.58it/s]/home/edisondao/projects/11-785/11-785_EfficientAT/models/preprocess.py:56: FutureWarning: `torch.cuda.amp.autocast(args...)` is deprecated. Please use `torch.amp.autocast('cuda', args...)` instead.
+  with torch.cuda.amp.autocast(enabled=False):███████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████| 4/4 [00:01<00:00,  2.58it/s]/home/edisondao/projects/11-785/11-785_EfficientAT/models/preprocess.py:56: FutureWarning: `torch.cuda.amp.autocast(args...)` is deprecated. Please use `torch.amp.autocast('cuda', args...)` instead.
+  with torch.cuda.amp.autocast(enabled=False):███████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████| 4/4 [00:01<00:00,  2.58it/s]/home/edisondao/projects/11-785/11-785_EfficientAT/models/preprocess.py:56: FutureWarning: `torch.cuda.amp.autocast(args...)` is deprecated. Please use `torch.amp.autocast('cuda', args...)` instead.
+  with torch.cuda.amp.autocast(enabled=False):███████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████| 4/4 [00:01<00:00,  2.58it/s]/home/edisondao/projects/11-785/11-785_EfficientAT/models/preprocess.py:56: FutureWarning: `torch.cuda.amp.autocast(args...)` is deprecated. Please use `torch.amp.autocast('cuda', args...)` instead.
+  with torch.cuda.amp.autocast(enabled=False):███████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████| 4/4 [00:01<00:00,  2.58it/s]/home/edisondao/projects/11-785/11-785_EfficientAT/models/preprocess.py:56: FutureWarning: `torch.cuda.amp.autocast(args...)` is deprecated. Please use `torch.amp.autocast('cuda', args...)` instead.
+Validating:  50%|████████████████████████████████████████████████████████████████████████████████████████████                                                                                            | 2/4 [00:01<00:01,  1.88it/s]/home/edisondao/projects/11-785/11-785_EfficientAT/models/preprocess.py:56: FutureWarning: `torch.cuda.amp.autocast(args...)` is deprecated. Please use `torch.amp.autocast('cuda', args...)` instead.
+Epoch 79/80: accuracy: 0.9575, val_loss: 0.3022:   8%|███████████▏                                                                                                                                      | 1/13 [00:01<00:18,  1.58s/it]/home/edisondao/projects/11-785/11-785_EfficientAT/models/preprocess.py:56: FutureWarning: `torch.cuda.amp.autocast(args...)` is deprecated. Please use `torch.amp.autocast('cuda', args...)` instead.
+Epoch 79/80: accuracy: 0.9575, val_loss: 0.3022:  23%|█████████████████████████████████▋                                                                                                                | 3/13 [00:03<00:09,  1.06it/s]/home/edisondao/projects/11-785/11-785_EfficientAT/models/preprocess.py:56: FutureWarning: `torch.cuda.amp.autocast(args...)` is deprecated. Please use `torch.amp.autocast('cuda', args...)` instead.
+Epoch 79/80: accuracy: 0.9575, val_loss: 0.3022:  23%|█████████████████████████████████▋                                                                                                                | 3/13 [00:03<00:09,  1.06it/s]/home/edisondao/projects/11-785/11-785_EfficientAT/models/preprocess.py:56: FutureWarning: `torch.cuda.amp.autocast(args...)` is deprecated. Please use `torch.amp.autocast('cuda', args...)` instead.
+Epoch 79/80: accuracy: 0.9575, val_loss: 0.3022:  23%|█████████████████████████████████▋                                                                                                                | 3/13 [00:03<00:09,  1.06it/s]/home/edisondao/projects/11-785/11-785_EfficientAT/models/preprocess.py:56: FutureWarning: `torch.cuda.amp.autocast(args...)` is deprecated. Please use `torch.amp.autocast('cuda', args...)` instead.
+Epoch 79/80: accuracy: 0.9575, val_loss: 0.3022:  23%|█████████████████████████████████▋                                                                                                                | 3/13 [00:03<00:09,  1.06it/s]/home/edisondao/projects/11-785/11-785_EfficientAT/models/preprocess.py:56: FutureWarning: `torch.cuda.amp.autocast(args...)` is deprecated. Please use `torch.amp.autocast('cuda', args...)` instead.
+Validating: 100%|████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████| 4/4 [00:01<00:00,  2.43it/s]/home/edisondao/projects/11-785/11-785_EfficientAT/models/preprocess.py:56: FutureWarning: `torch.cuda.amp.autocast(args...)` is deprecated. Please use `torch.amp.autocast('cuda', args...)` instead.
+  with torch.cuda.amp.autocast(enabled=False):███████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████| 4/4 [00:01<00:00,  2.43it/s]/home/edisondao/projects/11-785/11-785_EfficientAT/models/preprocess.py:56: FutureWarning: `torch.cuda.amp.autocast(args...)` is deprecated. Please use `torch.amp.autocast('cuda', args...)` instead.
+  with torch.cuda.amp.autocast(enabled=False):███████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████| 4/4 [00:01<00:00,  2.43it/s]/home/edisondao/projects/11-785/11-785_EfficientAT/models/preprocess.py:56: FutureWarning: `torch.cuda.amp.autocast(args...)` is deprecated. Please use `torch.amp.autocast('cuda', args...)` instead.
+  with torch.cuda.amp.autocast(enabled=False):███████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████| 4/4 [00:01<00:00,  2.43it/s]/home/edisondao/projects/11-785/11-785_EfficientAT/models/preprocess.py:56: FutureWarning: `torch.cuda.amp.autocast(args...)` is deprecated. Please use `torch.amp.autocast('cuda', args...)` instead.
+  with torch.cuda.amp.autocast(enabled=False):███████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████| 4/4 [00:01<00:00,  2.43it/s]/home/edisondao/projects/11-785/11-785_EfficientAT/models/preprocess.py:56: FutureWarning: `torch.cuda.amp.autocast(args...)` is deprecated. Please use `torch.amp.autocast('cuda', args...)` instead.
+  with torch.cuda.amp.autocast(enabled=False):███████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████| 4/4 [00:01<00:00,  2.43it/s]/home/edisondao/projects/11-785/11-785_EfficientAT/models/preprocess.py:56: FutureWarning: `torch.cuda.amp.autocast(args...)` is deprecated. Please use `torch.amp.autocast('cuda', args...)` instead.
+Validating: 100%|████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████| 4/4 [00:01<00:00,  3.25it/s]/home/edisondao/projects/11-785/11-785_EfficientAT/models/preprocess.py:56: FutureWarning: `torch.cuda.amp.autocast(args...)` is deprecated. Please use `torch.amp.autocast('cuda', args...)` instead.
+Validating: 100%|████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████| 4/4 [00:01<00:00,  3.25it/s]/home/edisondao/projects/11-785/11-785_EfficientAT/models/preprocess.py:56: FutureWarning: `torch.cuda.amp.autocast(args...)` is deprecated. Please use `torch.amp.autocast('cuda', args...)` instead.
+Validating: 100%|████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████| 4/4 [00:01<00:00,  3.25it/s]/home/edisondao/projects/11-785/11-785_EfficientAT/models/preprocess.py:56: FutureWarning: `torch.cuda.amp.autocast(args...)` is deprecated. Please use `torch.amp.autocast('cuda', args...)` instead.
