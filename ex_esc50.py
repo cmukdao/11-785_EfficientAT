@@ -21,6 +21,7 @@ def train(args):
 
     # logging is done using wandb
     wandb.init(
+        entity="11-785_perforated_ai",
         project="ESC50",
         notes="Fine-tune Models on ESC50.",
         tags=["Environmental Sound Classification", "Fine-Tuning"],
