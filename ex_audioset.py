@@ -1,4 +1,3 @@
-import wandb
 import numpy as np
 import os
 from torch import autocast
@@ -20,6 +19,10 @@ from models.ensemble import get_ensemble_model
 from models.preprocess import AugmentMelSTFT
 from helpers.init import worker_init_fn
 from helpers.utils import NAME_TO_WIDTH, exp_warmup_linear_down, mixup
+from helpers.wandb import get_wandb
+
+
+wandb = get_wandb()
 
 preds_url = \
     "https://github.com/fschmid56/EfficientAT/releases/download/v0.0.1/passt_enemble_logits_mAP_495.npy"

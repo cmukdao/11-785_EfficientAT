@@ -3,27 +3,32 @@ from torch.utils.data import Dataset as TorchDataset
 import torch
 import numpy as np
 import pandas as pd
-import librosa
+import torchaudio
 
 from datasets.helpers.audiodatasets import PreprocessDataset, get_roll_func
 
-# specify ESC50 location in 'dataset_dir'
-# 3 files have to be located there:
-# - FSD50K.eval_mp3.hdf
-# - FSD50K.val_mp3.hdf
-# - FSD50K.train_mp3.hdf
-# follow the instructions here to get these 3 files:
-# https://github.com/kkoutini/PaSST/tree/main/esc50
+# specify ESC50 location in 'dataset_dir' or via EFFICIENTAT_ESC50_DIR
+# the directory should contain:
+# - meta/esc50.csv
+# - audio_32k/ or audio/
+dataset_dir = os.environ.get("EFFICIENTAT_ESC50_DIR")
 
-dataset_dir = None
-
-assert dataset_dir is not None, "Specify ESC50 dataset location in variable 'dataset_dir'. " \
+assert dataset_dir is not None, "Specify ESC50 dataset location in variable 'dataset_dir' " \
+                                "or environment variable 'EFFICIENTAT_ESC50_DIR'. " \
                                 "Check out the Readme file for further instructions. " \
                                 "https://github.com/fschmid56/EfficientAT/blob/main/README.md"
 
+
+def _get_audio_path(base_dir):
+    for audio_dir in ("audio_32k", "audio"):
+        candidate = os.path.join(base_dir, audio_dir)
+        if os.path.isdir(candidate):
+            return candidate
+    return os.path.join(base_dir, "audio_32k")
+
 dataset_config = {
     'meta_csv': os.path.join(dataset_dir, "meta/esc50.csv"),
-    'audio_path': os.path.join(dataset_dir, "audio_32k/"),
+    'audio_path': _get_audio_path(dataset_dir),
     'num_of_classes': 50
 }
 
@@ -42,6 +47,17 @@ def pydub_augment(waveform, gain_augment=0):
         amp = 10 ** (gain / 20)
         waveform = waveform * amp
     return waveform
+
+
+def load_audio(audio_path, sample_rate):
+    waveform, original_sample_rate = torchaudio.load(audio_path)
+    if waveform.shape[0] > 1:
+        waveform = waveform.mean(dim=0, keepdim=True)
+    if original_sample_rate != sample_rate:
+        waveform = torchaudio.functional.resample(
+            waveform, orig_freq=original_sample_rate, new_freq=sample_rate
+        )
+    return waveform.squeeze(0).float().numpy()
 
 
 class MixupDataset(TorchDataset):
@@ -112,7 +128,7 @@ class AudioSetDataset(TorchDataset):
         """
         row = self.df.iloc[index]
 
-        waveform, _ = librosa.load(self.audiopath + row.filename, sr=self.resample_rate, mono=True)
+        waveform = load_audio(os.path.join(self.audiopath, row.filename), self.resample_rate)
         if self.gain_augment:
             waveform = pydub_augment(waveform, self.gain_augment)
         waveform = pad_or_truncate(waveform, self.clip_length)

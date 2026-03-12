@@ -1,4 +1,3 @@
-import wandb
 import numpy as np
 import os
 from tqdm import tqdm
@@ -14,6 +13,60 @@ from models.dymn.model import get_model as get_dymn
 from models.preprocess import AugmentMelSTFT
 from helpers.init import worker_init_fn
 from helpers.utils import NAME_TO_WIDTH, exp_warmup_linear_down, mixup
+from helpers.wandb import get_wandb
+
+
+wandb = get_wandb()
+
+
+def _get_device(args):
+    return torch.device('cuda') if args.cuda and torch.cuda.is_available() else torch.device('cpu')
+
+
+def _build_mel(args, device):
+    mel = AugmentMelSTFT(n_mels=args.n_mels,
+                         sr=args.resample_rate,
+                         win_length=args.window_size,
+                         hopsize=args.hop_size,
+                         n_fft=args.n_fft,
+                         freqm=args.freqm,
+                         timem=args.timem,
+                         fmin=args.fmin,
+                         fmax=args.fmax,
+                         fmin_aug_range=args.fmin_aug_range,
+                         fmax_aug_range=args.fmax_aug_range
+                         )
+    mel.to(device)
+    return mel
+
+
+def _resolve_width(args):
+    if args.model_name:
+        return NAME_TO_WIDTH(args.model_name)
+    return args.model_width
+
+
+def _build_model(args, device, load_pretrained=True):
+    model_name = args.model_name
+    pretrained_name = model_name if args.pretrained and load_pretrained else None
+    width = _resolve_width(args)
+    if model_name.startswith("dymn"):
+        model = get_dymn(width_mult=width, pretrained_name=pretrained_name,
+                         pretrain_final_temp=args.pretrain_final_temp,
+                         num_classes=50)
+    else:
+        model = get_mobilenet(width_mult=width, pretrained_name=pretrained_name,
+                              head_type=args.head_type, se_dims=args.se_dims,
+                              num_classes=50)
+    model.to(device)
+    return model
+
+
+def _build_eval_loader(args):
+    return DataLoader(dataset=get_test_set(resample_rate=args.resample_rate, fold=args.fold),
+                      worker_init_fn=worker_init_fn,
+                      num_workers=args.num_workers,
+                      batch_size=args.batch_size)
 
 
 def train(args):
@@ -28,36 +81,10 @@ def train(args):
         name=args.experiment_name
     )
 
-    device = torch.device('cuda') if args.cuda and torch.cuda.is_available() else torch.device('cpu')
-
-    # model to preprocess waveform into mel spectrograms
-    mel = AugmentMelSTFT(n_mels=args.n_mels,
-                         sr=args.resample_rate,
-                         win_length=args.window_size,
-                         hopsize=args.hop_size,
-                         n_fft=args.n_fft,
-                         freqm=args.freqm,
-                         timem=args.timem,
-                         fmin=args.fmin,
-                         fmax=args.fmax,
-                         fmin_aug_range=args.fmin_aug_range,
-                         fmax_aug_range=args.fmax_aug_range
-                         )
-    mel.to(device)
-
-    # load prediction model
-    model_name = args.model_name
-    pretrained_name = model_name if args.pretrained else None
-    width = NAME_TO_WIDTH(model_name) if model_name and args.pretrained else args.model_width
-    if model_name.startswith("dymn"):
-        model = get_dymn(width_mult=width, pretrained_name=pretrained_name,
-                         pretrain_final_temp=args.pretrain_final_temp,
-                         num_classes=50)
-    else:
-        model = get_mobilenet(width_mult=width, pretrained_name=pretrained_name,
-                              head_type=args.head_type, se_dims=args.se_dims,
-                              num_classes=50)
-    model.to(device)
+    device = _get_device(args)
+    mel = _build_mel(args, device)
+    model = _build_model(args, device, load_pretrained=True)
+    width = _resolve_width(args)
 
     # dataloader
     dl = DataLoader(dataset=get_training_set(resample_rate=args.resample_rate,
@@ -71,10 +98,7 @@ def train(args):
                     shuffle=True)
 
     # evaluation loader
-    eval_dl = DataLoader(dataset=get_test_set(resample_rate=args.resample_rate, fold=args.fold),
-                         worker_init_fn=worker_init_fn,
-                         num_workers=args.num_workers,
-                         batch_size=args.batch_size)
+    eval_dl = _build_eval_loader(args)
 
     # optimizer & scheduler
     lr = args.lr
@@ -143,6 +167,23 @@ def train(args):
         torch.save(model.state_dict(), os.path.join(wandb.run.dir, name))
 
 
+def evaluate(args):
+    assert args.checkpoint_path is not None, "--checkpoint_path is required with --eval_only"
+
+    device = _get_device(args)
+    mel = _build_mel(args, device)
+    model = _build_model(args, device, load_pretrained=False)
+    state_dict = torch.load(args.checkpoint_path, map_location=device)
+    model.load_state_dict(state_dict)
+
+    eval_dl = _build_eval_loader(args)
+    accuracy, val_loss = _test(model, mel, eval_dl, device)
+    print(f"ESC-50 fold {args.fold} evaluation")
+    print(f"  checkpoint: {args.checkpoint_path}")
+    print(f"  accuracy: {accuracy:.4f}")
+    print(f"  val_loss: {val_loss:.4f}")
+
+
 def _mel_forward(x, mel):
     old_shape = x.size()
     x = x.reshape(-1, old_shape[2])
@@ -187,6 +228,8 @@ if __name__ == '__main__':
     parser.add_argument('--batch_size', type=int, default=128)
     parser.add_argument('--num_workers', type=int, default=12)
     parser.add_argument('--fold', type=int, default=1)
+    parser.add_argument('--eval_only', action='store_true', default=False)
+    parser.add_argument('--checkpoint_path', type=str, default=None)
 
     # training
     parser.add_argument('--pretrained', action='store_true', default=False)
@@ -223,4 +266,7 @@ if __name__ == '__main__':
     parser.add_argument('--fmax_aug_range', type=int, default=2000)
 
     args = parser.parse_args()
-    train(args)
+    if args.eval_only:
+        evaluate(args)
+    else:
+        train(args)

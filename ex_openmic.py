@@ -1,4 +1,3 @@
-import wandb
 import numpy as np
 import os
 from tqdm import tqdm
@@ -14,6 +13,10 @@ from models.dymn.model import get_model as get_dymn
 from models.preprocess import AugmentMelSTFT
 from helpers.init import worker_init_fn
 from helpers.utils import NAME_TO_WIDTH, exp_warmup_linear_down, mixup
+from helpers.wandb import get_wandb
+
+
+wandb = get_wandb()
 
 
 def train(args):

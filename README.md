@@ -298,13 +298,16 @@ Checkout the results of the example run above [here](https://api.wandb.ai/links/
 ## Fine-tune on ESC-50 [13]
 
 Follow the instructions in the [PaSST](https://github.com/kkoutini/PaSST/tree/main/esc50) repository to get the ESC50 dataset.
+You can also use the official [ESC-50 repository](https://github.com/karolpiczak/ESC-50) directly.
 
-You should end up with a folder `esc50` containing the two folders:
+You should end up with a folder `esc50` containing:
 
 * `meta`: contains `meta.csv`
-* `audio_32k`: contains all .wav files
+* `audio_32k`: contains all .wav files resampled to 32 kHz, or
+* `audio`: the original official ESC-50 wav files
 
-Specify the location of this directory in the variable ```dataset_dir``` in the [dataset file](datasets/esc50.py).
+Specify the location of this directory in the variable ```dataset_dir``` in the [dataset file](datasets/esc50.py),
+or export `EFFICIENTAT_ESC50_DIR=/path/to/esc50`.
 
 To fine-tune a pre-trained MobileNet on ESC-50, run the following command:
 
