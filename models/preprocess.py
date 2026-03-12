@@ -53,7 +53,7 @@ class AugmentMelSTFT(nn.Module):
                                         fmin, fmax, vtln_low=100.0, vtln_high=-500., vtln_warp_factor=1.0)
         mel_basis = torch.as_tensor(torch.nn.functional.pad(mel_basis, (0, 1), mode='constant', value=0),
                                     device=x.device)
-        with torch.cuda.amp.autocast(enabled=False):
+        with torch.amp.autocast(device_type="cuda", enabled=False):
             melspec = torch.matmul(mel_basis, x)
 
         melspec = (melspec + 0.00001).log()

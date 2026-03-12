@@ -27,7 +27,7 @@ def spawn_get(seedseq, n_entropy, dtype):
     elif dtype == int:
         state_as_int = 0
         for shift, s in enumerate(state):
-            state_as_int = state_as_int + int((2 ** (32 * shift) * s))
+            state_as_int += s << (32 * shift)
         return state_as_int
     else:
         raise ValueError(f'not a valid dtype "{dtype}"')

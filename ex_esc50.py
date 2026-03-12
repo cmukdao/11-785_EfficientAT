@@ -61,21 +61,33 @@ def train(args):
     model.to(device)
 
     # dataloader
-    dl = DataLoader(dataset=get_training_set(resample_rate=args.resample_rate,
-                                             roll=False if args.no_roll else True,
-                                             wavmix=False if args.no_wavmix else True,
-                                             gain_augment=args.gain_augment,
-                                             fold=args.fold),
-                    worker_init_fn=worker_init_fn,
-                    num_workers=args.num_workers,
-                    batch_size=args.batch_size,
-                    shuffle=True)
+    dl = DataLoader(
+        dataset=get_training_set(
+            resample_rate=args.resample_rate,
+            roll=False if args.no_roll else True,
+            wavmix=False if args.no_wavmix else True,
+            gain_augment=args.gain_augment,
+            fold=args.fold
+        ),
+        worker_init_fn=worker_init_fn,
+        num_workers=args.num_workers,
+        batch_size=args.batch_size,
+        shuffle=True,
+        pin_memory=True,
+        persistent_workers=True if args.num_workers > 0 else False,
+        prefetch_factor=2 if args.num_workers > 0 else None,
+        drop_last=True
+    )
 
-    # evaluation loader
-    eval_dl = DataLoader(dataset=get_test_set(resample_rate=args.resample_rate, fold=args.fold),
-                         worker_init_fn=worker_init_fn,
-                         num_workers=args.num_workers,
-                         batch_size=args.batch_size)
+    eval_dl = DataLoader(
+        dataset=get_test_set(resample_rate=args.resample_rate, fold=args.fold),
+        worker_init_fn=worker_init_fn,
+        num_workers=args.num_workers,
+        batch_size=args.batch_size,
+        pin_memory=True,
+        persistent_workers=True if args.num_workers > 0 else False,
+        prefetch_factor=2 if args.num_workers > 0 else None
+    )
 
     # optimizer & scheduler
     lr = args.lr
@@ -84,6 +96,8 @@ def train(args):
     schedule_lambda = \
         exp_warmup_linear_down(args.warm_up_len, args.ramp_down_len, args.ramp_down_start, args.last_lr_value)
     scheduler = torch.optim.lr_scheduler.LambdaLR(optimizer, schedule_lambda)
+
+    scaler = torch.amp.GradScaler('cuda')
 
     name = None
     accuracy, val_loss = float('NaN'), float('NaN')
@@ -98,7 +112,7 @@ def train(args):
         for batch in pbar:
             x, f, y = batch
             bs = x.size(0)
-            x, y = x.to(device), y.to(device)
+            x, y = x.to(device, non_blocking=True), y.to(device, non_blocking=True)
             x = _mel_forward(x, mel)
 
             if args.mixup_alpha:
@@ -122,9 +136,10 @@ def train(args):
             train_stats['train_loss'].append(loss.detach().cpu().numpy())
 
             # Update Model
-            loss.backward()
-            optimizer.step()
-            optimizer.zero_grad()
+            scaler.scale(loss).backward()
+            scaler.step(optimizer)
+            scaler.update()
+
         # Update learning rate
         scheduler.step()
 
@@ -163,8 +178,8 @@ def _test(model, mel, eval_loader, device):
     pbar.set_description("Validating")
     for batch in pbar:
         x, f, y = batch
-        x = x.to(device)
-        y = y.to(device)
+        x = x.to(device, non_blocking=True)
+        y = y.to(device, non_blocking=True)
         with torch.no_grad():
             x = _mel_forward(x, mel)
             y_hat, _ = model(x)
@@ -186,7 +201,7 @@ if __name__ == '__main__':
     parser.add_argument('--experiment_name', type=str, default="ESC50")
     parser.add_argument('--cuda', action='store_true', default=False)
     parser.add_argument('--batch_size', type=int, default=128)
-    parser.add_argument('--num_workers', type=int, default=12)
+    parser.add_argument('--num_workers', type=int, default=8)
     parser.add_argument('--fold', type=int, default=1)
 
     # training

@@ -2,7 +2,7 @@ from functools import partial
 from typing import Any, Callable, List, Optional, Sequence, Tuple, Union
 from torch import nn, Tensor
 import torch.nn.functional as F
-from torchvision.ops.misc import ConvNormActivation
+from torchvision.ops.misc import Conv2dNormActivation
 from torch.hub import load_state_dict_from_url
 import urllib.parse
 
@@ -122,7 +122,7 @@ class MN(nn.Module):
         # building first layer
         firstconv_output_channels = inverted_residual_setting[0].input_channels
         layers.append(
-            ConvNormActivation(
+            Conv2dNormActivation(
                 in_channels,
                 firstconv_output_channels,
                 kernel_size=in_conv_kernel,
@@ -157,7 +157,7 @@ class MN(nn.Module):
         lastconv_input_channels = inverted_residual_setting[-1].out_channels
         lastconv_output_channels = 6 * lastconv_input_channels
         layers.append(
-            ConvNormActivation(
+            Conv2dNormActivation(
                 lastconv_input_channels,
                 lastconv_output_channels,
                 kernel_size=1,
