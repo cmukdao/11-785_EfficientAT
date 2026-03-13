@@ -31,6 +31,8 @@ def train(args):
 
     device = torch.device('cuda') if args.cuda and torch.cuda.is_available() else torch.device('cpu')
 
+    scaler = torch.amp.GradScaler(device_type="cuda", enabled=(device.type == "cuda"))
+
     # model to preprocess waveform into mel spectrograms
     mel = AugmentMelSTFT(n_mels=args.n_mels,
                          sr=args.resample_rate,
@@ -113,6 +115,7 @@ def train(args):
         pbar = tqdm(dl)
         pbar.set_description("Epoch {}/{}: accuracy: {:.4f}, val_loss: {:.4f}"
                              .format(epoch + 1, args.n_epochs, accuracy, val_loss))
+        
         for batch in pbar:
             x, f, y = batch
             bs = x.size(0)
@@ -120,31 +123,37 @@ def train(args):
 
             optimizer.zero_grad(set_to_none=True)
 
-            x = _mel_forward(x, mel)
+            with torch.amp.autocast(device_type=device.type, enabled=(scaler is not None)):
+                x = _mel_forward(x, mel)
 
-            if args.mixup_alpha:
-                rn_indices, lam = mixup(bs, args.mixup_alpha)
-                lam = lam.to(x.device)
-                x = x * lam.reshape(bs, 1, 1, 1) + \
-                    x[rn_indices] * (1. - lam.reshape(bs, 1, 1, 1))
-                y_hat, _ = model(x)
-                samples_loss = (F.cross_entropy(y_hat, y, reduction="none") * lam.reshape(bs) +
-                                F.cross_entropy(y_hat, y[rn_indices], reduction="none") * (
-                                            1. - lam.reshape(bs)))
+                if args.mixup_alpha:
+                    rn_indices, lam = mixup(bs, args.mixup_alpha)
+                    lam = lam.to(x.device)
+                    x = x * lam.reshape(bs, 1, 1, 1) + \
+                        x[rn_indices] * (1. - lam.reshape(bs, 1, 1, 1))
+                    y_hat, _ = model(x)
+                    samples_loss = (F.cross_entropy(y_hat, y, reduction="none") * lam.reshape(bs) +
+                                    F.cross_entropy(y_hat, y[rn_indices], reduction="none") * (
+                                                1. - lam.reshape(bs)))
 
-            else:
-                y_hat, _ = model(x)
-                samples_loss = F.cross_entropy(y_hat, y, reduction="none")
+                else:
+                    y_hat, _ = model(x)
+                    samples_loss = F.cross_entropy(y_hat, y, reduction="none")
 
-            # loss
-            loss = samples_loss.mean()
+                # loss
+                loss = samples_loss.mean()
 
-            # append training statistics
-            train_stats['train_loss'].append(loss.detach().cpu().numpy())
+                # append training statistics
+                train_stats['train_loss'].append(loss.detach().cpu().numpy())
 
-            # Update Model
-            loss.backward()
-            optimizer.step()
+                # Update Model
+                if scaler is not None:
+                    scaler.scale(loss).backward()
+                    scaler.step(optimizer)
+                    scaler.update()
+                else:
+                    loss.backward()
+                    optimizer.step()
 
         # Update learning rate
         scheduler.step()
