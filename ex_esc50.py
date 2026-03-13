@@ -60,6 +60,13 @@ def train(args):
                               num_classes=50)
     model.to(device)
 
+    # parameter counts
+    total_params = sum(p.numel() for p in model.parameters())
+    trainable_params = sum(p.numel() for p in model.parameters() if p.requires_grad)
+
+    print("param_count: ", total_params)
+    print("trainable_param_count: ", trainable_params)
+    
     # dataloader
     dl = DataLoader(
         dataset=get_training_set(
@@ -74,9 +81,8 @@ def train(args):
         batch_size=args.batch_size,
         shuffle=True,
         pin_memory=True,
-        persistent_workers=True if args.num_workers > 0 else False,
-        prefetch_factor=2 if args.num_workers > 0 else None,
-        drop_last=True
+        persistent_workers=False,
+        prefetch_factor=args.num_workers//2 if args.num_workers > 0 else None,
     )
 
     eval_dl = DataLoader(
@@ -85,8 +91,8 @@ def train(args):
         num_workers=args.num_workers,
         batch_size=args.batch_size,
         pin_memory=True,
-        persistent_workers=True if args.num_workers > 0 else False,
-        prefetch_factor=2 if args.num_workers > 0 else None
+        persistent_workers=False,
+        prefetch_factor=args.num_workers//2 if args.num_workers > 0 else None
     )
 
     # optimizer & scheduler
@@ -96,8 +102,6 @@ def train(args):
     schedule_lambda = \
         exp_warmup_linear_down(args.warm_up_len, args.ramp_down_len, args.ramp_down_start, args.last_lr_value)
     scheduler = torch.optim.lr_scheduler.LambdaLR(optimizer, schedule_lambda)
-
-    scaler = torch.amp.GradScaler('cuda')
 
     name = None
     accuracy, val_loss = float('NaN'), float('NaN')
@@ -113,6 +117,9 @@ def train(args):
             x, f, y = batch
             bs = x.size(0)
             x, y = x.to(device, non_blocking=True), y.to(device, non_blocking=True)
+
+            optimizer.zero_grad(set_to_none=True)
+
             x = _mel_forward(x, mel)
 
             if args.mixup_alpha:
@@ -136,9 +143,8 @@ def train(args):
             train_stats['train_loss'].append(loss.detach().cpu().numpy())
 
             # Update Model
-            scaler.scale(loss).backward()
-            scaler.step(optimizer)
-            scaler.update()
+            loss.backward()
+            optimizer.step()
 
         # Update learning rate
         scheduler.step()
@@ -147,10 +153,12 @@ def train(args):
         accuracy, val_loss = _test(model, mel, eval_dl, device)
 
         # log train and validation statistics
-        wandb.log({"train_loss": np.mean(train_stats['train_loss']),
-                   "accuracy": accuracy,
-                   "val_loss": val_loss
-                   })
+        wandb.log({
+            "train_loss": np.mean(train_stats['train_loss']),
+            "accuracy": accuracy,
+            "val_loss": val_loss,
+            "lr": optimizer.param_groups[0]["lr"],
+        })
 
         # remove previous model (we try to not flood your hard disk) and save latest model
         if name is not None:
