@@ -15,7 +15,14 @@ from helpers.init import worker_init_fn
 from helpers.utils import NAME_TO_WIDTH, exp_warmup_linear_down, mixup
 from helpers.wandb import get_wandb
 
-
+'''
+EFFICIENTAT_ESC50_DIR=/home/xinyiy/datasets/ESC-50 \
+python ex_esc50.py \
+    --cuda --model_name=mn10_as --fold=1 \
+    --experiment_name=ESC50_mn_baseline \
+    --wandb_entity=11-785_perforated_ai \
+    --wandb_project=ESC50
+'''
 wandb = get_wandb()
 
 
@@ -69,12 +76,30 @@ def _build_eval_loader(args):
                       batch_size=args.batch_size)
 
 
+def _targets_to_indices(targets):
+    if targets.ndim == 1:
+        return targets.long()
+    return targets.argmax(dim=1)
+
+
+def _cross_entropy(logits, targets, reduction="mean"):
+    if targets.is_floating_point():
+        targets = targets.to(dtype=logits.dtype)
+    return F.cross_entropy(logits, targets, reduction=reduction)
+
+
+def _checkpoint_name(args, epoch, accuracy):
+    model_tag = args.model_name.split("_", 1)[0] if args.model_name else "model"
+    return f"{model_tag}_esc50_epoch_{epoch}_acc_{int(round(accuracy * 1000))}.pt"
+
+
 def train(args):
     # Train Models for Acoustic Scene Classification
 
     # logging is done using wandb
     wandb.init(
-        project="ESC50",
+        entity=args.wandb_entity,
+        project=args.wandb_project,
         notes="Fine-tune Models on ESC50.",
         tags=["Environmental Sound Classification", "Fine-Tuning"],
         config=args,
@@ -84,7 +109,6 @@ def train(args):
     device = _get_device(args)
     mel = _build_mel(args, device)
     model = _build_model(args, device, load_pretrained=True)
-    width = _resolve_width(args)
 
     # dataloader
     dl = DataLoader(dataset=get_training_set(resample_rate=args.resample_rate,
@@ -121,7 +145,8 @@ def train(args):
         for batch in pbar:
             x, f, y = batch
             bs = x.size(0)
-            x, y = x.to(device), y.to(device)
+            x = x.to(device)
+            y = y.to(device)
             x = _mel_forward(x, mel)
 
             if args.mixup_alpha:
@@ -130,13 +155,13 @@ def train(args):
                 x = x * lam.reshape(bs, 1, 1, 1) + \
                     x[rn_indices] * (1. - lam.reshape(bs, 1, 1, 1))
                 y_hat, _ = model(x)
-                samples_loss = (F.cross_entropy(y_hat, y, reduction="none") * lam.reshape(bs) +
-                                F.cross_entropy(y_hat, y[rn_indices], reduction="none") * (
+                samples_loss = (_cross_entropy(y_hat, y, reduction="none") * lam.reshape(bs) +
+                                _cross_entropy(y_hat, y[rn_indices], reduction="none") * (
                                             1. - lam.reshape(bs)))
 
             else:
                 y_hat, _ = model(x)
-                samples_loss = F.cross_entropy(y_hat, y, reduction="none")
+                samples_loss = _cross_entropy(y_hat, y, reduction="none")
 
             # loss
             loss = samples_loss.mean()
@@ -163,7 +188,7 @@ def train(args):
         # remove previous model (we try to not flood your hard disk) and save latest model
         if name is not None:
             os.remove(os.path.join(wandb.run.dir, name))
-        name = f"mn{str(width).replace('.', '')}_esc50_epoch_{epoch}_acc_{int(round(accuracy*1000))}.pt"
+        name = _checkpoint_name(args, epoch, accuracy)
         torch.save(model.state_dict(), os.path.join(wandb.run.dir, name))
 
 
@@ -208,14 +233,14 @@ def _test(model, mel, eval_loader, device):
         with torch.no_grad():
             x = _mel_forward(x, mel)
             y_hat, _ = model(x)
-        targets.append(y.cpu().numpy())
+        targets.append(_targets_to_indices(y).cpu().numpy())
         outputs.append(y_hat.float().cpu().numpy())
-        losses.append(F.cross_entropy(y_hat, y).cpu().numpy())
+        losses.append(_cross_entropy(y_hat, y).cpu().numpy())
 
     targets = np.concatenate(targets)
     outputs = np.concatenate(outputs)
     losses = np.stack(losses)
-    accuracy = metrics.accuracy_score(targets.argmax(axis=1), outputs.argmax(axis=1))
+    accuracy = metrics.accuracy_score(targets, outputs.argmax(axis=1))
     return accuracy, losses.mean()
 
 
@@ -224,6 +249,8 @@ if __name__ == '__main__':
 
     # general
     parser.add_argument('--experiment_name', type=str, default="ESC50")
+    parser.add_argument('--wandb_project', type=str, default="ESC50")
+    parser.add_argument('--wandb_entity', type=str, default=None)
     parser.add_argument('--cuda', action='store_true', default=False)
     parser.add_argument('--batch_size', type=int, default=128)
     parser.add_argument('--num_workers', type=int, default=12)
@@ -243,7 +270,7 @@ if __name__ == '__main__':
     parser.add_argument('--no_roll', action='store_true', default=False)
     parser.add_argument('--no_wavmix', action='store_true', default=False)
     parser.add_argument('--gain_augment', type=int, default=12)
-    parser.add_argument('--weight_decay', type=int, default=0.0)
+    parser.add_argument('--weight_decay', type=float, default=0.0)
 
     # lr schedule
     parser.add_argument('--lr', type=float, default=6e-5)

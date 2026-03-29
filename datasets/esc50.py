@@ -60,6 +60,12 @@ def load_audio(audio_path, sample_rate):
     return waveform.squeeze(0).float().numpy()
 
 
+def _to_float32_tensor(value):
+    if torch.is_tensor(value):
+        return value.to(dtype=torch.float32)
+    return torch.as_tensor(value, dtype=torch.float32)
+
+
 class MixupDataset(TorchDataset):
     """ Mixing Up wave forms
     """
@@ -75,14 +81,20 @@ class MixupDataset(TorchDataset):
             x1, f1, y1 = self.dataset[index]
             idx2 = torch.randint(len(self.dataset), (1,)).item()
             x2, f2, y2 = self.dataset[idx2]
-            l = np.random.beta(self.beta, self.beta)
-            l = max(l, 1. - l)
+            x1 = _to_float32_tensor(x1)
+            x2 = _to_float32_tensor(x2)
+            y1 = _to_float32_tensor(y1)
+            y2 = _to_float32_tensor(y2)
+            l = np.float32(np.random.beta(self.beta, self.beta))
+            l = max(l, np.float32(1.0) - l)
             x1 = x1 - x1.mean()
             x2 = x2 - x2.mean()
-            x = (x1 * l + x2 * (1. - l))
+            x = x1 * l + x2 * (np.float32(1.0) - l)
             x = x - x.mean()
-            return x, f1, (y1 * l + y2 * (1. - l))
-        return self.dataset[index]
+            y = y1 * l + y2 * (np.float32(1.0) - l)
+            return x, f1, y
+        x, filename, y = self.dataset[index]
+        return _to_float32_tensor(x), filename, _to_float32_tensor(y)
 
     def __len__(self):
         return len(self.dataset)
@@ -131,10 +143,10 @@ class AudioSetDataset(TorchDataset):
         waveform = load_audio(os.path.join(self.audiopath, row.filename), self.resample_rate)
         if self.gain_augment:
             waveform = pydub_augment(waveform, self.gain_augment)
-        waveform = pad_or_truncate(waveform, self.clip_length)
-        target = np.zeros(self.classes_num)
-        target[row.target] = 1
-        return waveform.reshape(1, -1),  row.filename, target
+        waveform = pad_or_truncate(waveform, self.clip_length).astype(np.float32, copy=False)
+        target = np.zeros(self.classes_num, dtype=np.float32)
+        target[int(row.target)] = 1.0
+        return waveform.reshape(1, -1), row.filename, target
 
 
 def get_base_training_set(resample_rate=32000, gain_augment=0, fold=1):

@@ -2,3 +2,13 @@ __pycache__
 resources/*.pt
 resources/*.npy
 .idea
+wandb/
+
+# Large experiment artifacts
+*.pt
+*.pth
+*.ckpt
+*.safetensors
+ESC50_PAI*/
+PAI/
+PerforatedAI/
