@@ -1,5 +1,11 @@
 import sys
 import os
+
+_REPO_DIR = os.path.dirname(os.path.abspath(__file__))
+_LOCAL_PAI_ROOT = os.path.join(_REPO_DIR, "PerforatedAI")
+if _LOCAL_PAI_ROOT not in sys.path:
+    sys.path.insert(0, _LOCAL_PAI_ROOT)
+
 '''
 USAGE: Pick ONE of the two training options, then eval.
 

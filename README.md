@@ -302,12 +302,17 @@ You can also use the official [ESC-50 repository](https://github.com/karolpiczak
 
 You should end up with a folder `esc50` containing:
 
-* `meta`: contains `meta.csv`
+* `meta`: contains `esc50.csv`
 * `audio_32k`: contains all .wav files resampled to 32 kHz, or
 * `audio`: the original official ESC-50 wav files
 
-Specify the location of this directory in the variable ```dataset_dir``` in the [dataset file](datasets/esc50.py),
-or export `EFFICIENTAT_ESC50_DIR=/path/to/esc50`.
+The repo now supports three ways to resolve ESC-50 paths:
+
+* Recommended repo-local layout: keep the tracked metadata CSV at `datasets/esc50.csv` and place the dataset audio under `datasets/ESC-50/audio` or `datasets/ESC-50/audio_32k`
+* Dataset-root environment variable: export `EFFICIENTAT_ESC50_DIR=/path/to/ESC-50`
+* Explicit overrides: set `EFFICIENTAT_ESC50_META_CSV=/path/to/esc50.csv` and/or `EFFICIENTAT_ESC50_AUDIO_DIR=/path/to/audio`
+
+With the repo-local layout, the ESC-50 scripts can run without editing code or setting dataset env vars.
 
 To fine-tune a pre-trained MobileNet on ESC-50, run the following command:
 

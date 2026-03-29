@@ -1,4 +1,5 @@
 import os
+from functools import lru_cache
 from torch.utils.data import Dataset as TorchDataset
 import torch
 import numpy as np
@@ -7,30 +8,94 @@ import torchaudio
 
 from datasets.helpers.audiodatasets import PreprocessDataset, get_roll_func
 
-# specify ESC50 location in 'dataset_dir' or via EFFICIENTAT_ESC50_DIR
-# the directory should contain:
-# - meta/esc50.csv
-# - audio_32k/ or audio/
-dataset_dir = os.environ.get("EFFICIENTAT_ESC50_DIR")
-
-assert dataset_dir is not None, "Specify ESC50 dataset location in variable 'dataset_dir' " \
-                                "or environment variable 'EFFICIENTAT_ESC50_DIR'. " \
-                                "Check out the Readme file for further instructions. " \
-                                "https://github.com/fschmid56/EfficientAT/blob/main/README.md"
+_THIS_DIR = os.path.dirname(os.path.abspath(__file__))
+_REPO_ROOT = os.path.dirname(_THIS_DIR)
 
 
-def _get_audio_path(base_dir):
-    for audio_dir in ("audio_32k", "audio"):
-        candidate = os.path.join(base_dir, audio_dir)
+def _unique_existing_candidates(candidates):
+    seen = set()
+    unique = []
+    for candidate in candidates:
+        if not candidate:
+            continue
+        candidate = os.path.abspath(candidate)
+        if candidate in seen:
+            continue
+        seen.add(candidate)
+        unique.append(candidate)
+    return unique
+
+
+def _audio_dir_candidates(base_dir):
+    if not base_dir:
+        return []
+    return [
+        os.path.join(base_dir, "audio_32k"),
+        os.path.join(base_dir, "audio"),
+    ]
+
+
+def _meta_csv_candidates(base_dir):
+    if not base_dir:
+        return []
+    return [
+        os.path.join(base_dir, "meta", "esc50.csv"),
+        os.path.join(base_dir, "esc50.csv"),
+    ]
+
+
+def _resolve_audio_path():
+    env_audio_dir = os.environ.get("EFFICIENTAT_ESC50_AUDIO_DIR")
+    dataset_dir = os.environ.get("EFFICIENTAT_ESC50_DIR")
+    candidates = _unique_existing_candidates(
+        [env_audio_dir]
+        + _audio_dir_candidates(dataset_dir)
+        + _audio_dir_candidates(os.path.join(_REPO_ROOT, "datasets", "ESC-50"))
+        + _audio_dir_candidates(os.path.join(_REPO_ROOT, "ESC-50"))
+    )
+    for candidate in candidates:
         if os.path.isdir(candidate):
             return candidate
-    return os.path.join(base_dir, "audio_32k")
 
-dataset_config = {
-    'meta_csv': os.path.join(dataset_dir, "meta/esc50.csv"),
-    'audio_path': _get_audio_path(dataset_dir),
-    'num_of_classes': 50
-}
+    raise FileNotFoundError(
+        "Could not find ESC-50 audio directory. "
+        "Set EFFICIENTAT_ESC50_DIR to the dataset root, or set "
+        "EFFICIENTAT_ESC50_AUDIO_DIR directly. Checked: "
+        + ", ".join(candidates)
+    )
+
+
+def _resolve_meta_csv_path():
+    env_meta_csv = os.environ.get("EFFICIENTAT_ESC50_META_CSV")
+    dataset_dir = os.environ.get("EFFICIENTAT_ESC50_DIR")
+    candidates = _unique_existing_candidates(
+        [env_meta_csv]
+        + _meta_csv_candidates(dataset_dir)
+        + [
+            os.path.join(_THIS_DIR, "esc50.csv"),
+            os.path.join(_REPO_ROOT, "datasets", "ESC-50", "meta", "esc50.csv"),
+            os.path.join(_REPO_ROOT, "ESC-50", "meta", "esc50.csv"),
+        ]
+    )
+    for candidate in candidates:
+        if os.path.isfile(candidate):
+            return candidate
+
+    raise FileNotFoundError(
+        "Could not find ESC-50 metadata CSV. "
+        "Set EFFICIENTAT_ESC50_META_CSV directly or place esc50.csv under "
+        "EFFICIENTAT_ESC50_DIR/meta, EFFICIENTAT_ESC50_DIR/, or this repo's datasets/ directory. "
+        "Checked: " + ", ".join(candidates)
+    )
+
+
+@lru_cache(maxsize=1)
+def _get_dataset_config():
+    return {
+        'meta_csv': _resolve_meta_csv_path(),
+        'audio_path': _resolve_audio_path(),
+        'num_of_classes': 50
+    }
 
 
 def pad_or_truncate(x, audio_length):
@@ -150,6 +215,7 @@ class AudioSetDataset(TorchDataset):
 
 
 def get_base_training_set(resample_rate=32000, gain_augment=0, fold=1):
+    dataset_config = _get_dataset_config()
     meta_csv = dataset_config['meta_csv']
     audiopath = dataset_config['audio_path']
     ds = AudioSetDataset(meta_csv, audiopath, fold, train=True,
@@ -158,6 +224,7 @@ def get_base_training_set(resample_rate=32000, gain_augment=0, fold=1):
 
 
 def get_base_test_set(resample_rate=32000, fold=1):
+    dataset_config = _get_dataset_config()
     meta_csv = dataset_config['meta_csv']
     audiopath = dataset_config['audio_path']
     ds = AudioSetDataset(meta_csv, audiopath, fold, train=False, resample_rate=resample_rate)
