@@ -1,0 +1,17 @@
+# Common Virtual Environments
+myvenv*
+ENV*
+venv*
+
+# Common Data and Output Files
+data*
+PAI*
+
+# Build Folders
+**/__pycache__
+/build
+releases/*
+perforatedai.egg-info
+
+# Working Folders
+Examples/*

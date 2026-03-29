@@ -11,4 +11,3 @@ wandb/
 *.safetensors
 ESC50_PAI*/
 PAI/
-PerforatedAI/
