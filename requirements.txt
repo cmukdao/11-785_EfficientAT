@@ -9,3 +9,5 @@ torchvision
 tqdm
 wandb
 pandas
+perforatedai
+perforatedbp
