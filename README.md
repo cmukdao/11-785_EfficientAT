@@ -302,7 +302,7 @@ Follow the instructions in the [PaSST](https://github.com/kkoutini/PaSST/tree/ma
 You should end up with a folder `esc50` containing the two folders:
 
 * `meta`: contains `meta.csv`
-* `audio_32k`: contains all .wav files
+* `audio`: contains all .wav files
 
 Specify the location of this directory in the variable ```dataset_dir``` in the [dataset file](datasets/esc50.py).
 

@@ -23,7 +23,7 @@ assert dataset_dir is not None, "Specify ESC50 dataset location in variable 'dat
 
 dataset_config = {
     'meta_csv': os.path.join(dataset_dir, "meta/esc50.csv"),
-    'audio_path': os.path.join(dataset_dir, "audio_32k/"),
+    'audio_path': os.path.join(dataset_dir, "audio/"),
     'num_of_classes': 50
 }
 
