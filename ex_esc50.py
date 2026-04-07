@@ -31,7 +31,7 @@ def train(args):
 
     device = torch.device('cuda') if args.cuda and torch.cuda.is_available() else torch.device('cpu')
 
-    scaler = torch.amp.GradScaler(device_type="cuda", enabled=(device.type == "cuda"))
+    scaler = torch.amp.GradScaler("cuda", enabled=(device.type == "cuda"))
 
     # model to preprocess waveform into mel spectrograms
     mel = AugmentMelSTFT(n_mels=args.n_mels,
@@ -123,7 +123,7 @@ def train(args):
 
             optimizer.zero_grad(set_to_none=True)
 
-            with torch.amp.autocast(device_type=device.type, enabled=(scaler is not None)):
+            with torch.amp.autocast("cuda", enabled=(scaler is not None)):
                 x = _mel_forward(x, mel)
 
                 if args.mixup_alpha:
@@ -212,10 +212,10 @@ def _test(model, mel, eval_loader, device):
 
 
 if __name__ == '__main__':
-    parser = argparse.ArgumentParser(description='Example of parser. ')
+    parser = argparse.ArgumentParser(description='Fold 1.')
 
     # general
-    parser.add_argument('--experiment_name', type=str, default="ESC50")
+    parser.add_argument('--experiment_name', type=str, default="ESC50-mn05_as")
     parser.add_argument('--cuda', action='store_true', default=False)
     parser.add_argument('--batch_size', type=int, default=128)
     parser.add_argument('--num_workers', type=int, default=8)
