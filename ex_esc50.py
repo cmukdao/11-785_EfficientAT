@@ -23,6 +23,7 @@ def train(args):
     wandb.init(
         entity="11-785_perforated_ai",
         project="ESC50",
+        group=f"ESC50-{args.model_name}",
         notes="Fine-tune Models on ESC50.",
         tags=["Environmental Sound Classification", "Fine-Tuning"],
         config=args,
@@ -107,14 +108,26 @@ def train(args):
 
     name = None
     accuracy, val_loss = float('NaN'), float('NaN')
+    best_accuracy = -1.0
+    best_state = None
+    epochs_no_improve = 0
 
-    for epoch in range(args.n_epochs):
+    for epoch in range(args.max_epochs):
         mel.train()
         model.train()
         train_stats = dict(train_loss=list())
         pbar = tqdm(dl)
-        pbar.set_description("Epoch {}/{}: accuracy: {:.4f}, val_loss: {:.4f}"
-                             .format(epoch + 1, args.n_epochs, accuracy, val_loss))
+        pbar.set_description(
+            "Epoch {}/{} (best {:.4f}, stall {}/{}): acc {:.4f}, val_loss {:.4f}".format(
+                epoch + 1,
+                args.max_epochs,
+                best_accuracy if best_state is not None else float("nan"),
+                epochs_no_improve,
+                args.early_stop_patience,
+                accuracy,
+                val_loss,
+            )
+        )
         
         for batch in pbar:
             x, f, y = batch
@@ -161,12 +174,20 @@ def train(args):
         # evaluate
         accuracy, val_loss = _test(model, mel, eval_dl, device)
 
+        if accuracy > best_accuracy + args.early_stop_min_delta:
+            best_accuracy = accuracy
+            best_state = {k: v.detach().cpu().clone() for k, v in model.state_dict().items()}
+            epochs_no_improve = 0
+        else:
+            epochs_no_improve += 1
+
         # log train and validation statistics
         wandb.log({
             "train_loss": np.mean(train_stats['train_loss']),
             "accuracy": accuracy,
             "val_loss": val_loss,
             "lr": optimizer.param_groups[0]["lr"],
+            "epochs_without_improve": epochs_no_improve,
         })
 
         # remove previous model (we try to not flood your hard disk) and save latest model
@@ -174,6 +195,24 @@ def train(args):
             os.remove(os.path.join(wandb.run.dir, name))
         name = f"{model_name}_esc50_epoch_{epoch}_acc_{int(round(accuracy*1000))}.pt"
         torch.save(model.state_dict(), os.path.join(wandb.run.dir, name))
+
+        if (
+            epoch + 1 >= args.min_epochs
+            and epochs_no_improve >= args.early_stop_patience
+        ):
+            print(
+                "Early stopping: validation accuracy did not improve by more than "
+                f"{args.early_stop_min_delta} for {args.early_stop_patience} epochs "
+                f"(best accuracy {best_accuracy:.4f} at an earlier epoch)."
+            )
+            break
+
+    if best_state is not None:
+        model.load_state_dict(best_state)
+        model.to(device)
+        best_name = f"{model_name}_esc50_best_acc_{int(round(best_accuracy * 1000))}.pt"
+        torch.save(model.state_dict(), os.path.join(wandb.run.dir, best_name))
+        print(f"Restored best weights (accuracy {best_accuracy:.4f}), saved as {best_name}")
 
 
 def _mel_forward(x, mel):
@@ -212,10 +251,10 @@ def _test(model, mel, eval_loader, device):
 
 
 if __name__ == '__main__':
-    parser = argparse.ArgumentParser(description='Fold 1.')
+    parser = argparse.ArgumentParser(description='Fold 1. Reduced batch size to 64.')
 
     # general
-    parser.add_argument('--experiment_name', type=str, default="ESC50-mn05_as")
+    parser.add_argument('--experiment_name', type=str, default="ESC50-mn05_as-64bs")
     parser.add_argument('--cuda', action='store_true', default=False)
     parser.add_argument('--batch_size', type=int, default=128)
     parser.add_argument('--num_workers', type=int, default=8)
@@ -228,12 +267,35 @@ if __name__ == '__main__':
     parser.add_argument('--model_width', type=float, default=1.0)
     parser.add_argument('--head_type', type=str, default="mlp")
     parser.add_argument('--se_dims', type=str, default="c")
-    parser.add_argument('--n_epochs', type=int, default=80)
+    parser.add_argument(
+        '--max_epochs',
+        type=int,
+        default=500,
+        help='Upper bound on epochs (training usually stops earlier via early stopping).',
+    )
+    parser.add_argument(
+        '--early_stop_patience',
+        type=int,
+        default=20,
+        help='Stop if validation accuracy does not improve for this many epochs.',
+    )
+    parser.add_argument(
+        '--early_stop_min_delta',
+        type=float,
+        default=0.0,
+        help='Minimum accuracy gain to count as improvement (e.g. 0.001 for 0.1%%).',
+    )
+    parser.add_argument(
+        '--min_epochs',
+        type=int,
+        default=10,
+        help='Do not early-stop before this many epochs (e.g. allow LR warm-up).',
+    )
     parser.add_argument('--mixup_alpha', type=float, default=0.3)
     parser.add_argument('--no_roll', action='store_true', default=False)
     parser.add_argument('--no_wavmix', action='store_true', default=False)
     parser.add_argument('--gain_augment', type=int, default=12)
-    parser.add_argument('--weight_decay', type=int, default=0.0)
+    parser.add_argument('--weight_decay', type=float, default=0.0)
 
     # lr schedule
     parser.add_argument('--lr', type=float, default=6e-5)
