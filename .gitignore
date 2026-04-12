@@ -1,6 +1,7 @@
 __pycache__
 resources/*.pt
 resources/*.npy
+tests/
 wandb/
 pai/
 datasets/esc50
