@@ -1,5 +1,6 @@
 import io
 import os
+from functools import lru_cache
 import av
 from torch.utils.data import Dataset as TorchDataset, WeightedRandomSampler
 import torch
@@ -15,17 +16,69 @@ from datasets.helpers.audiodatasets import PreprocessDataset, get_roll_func
 # follow the instructions here to get these 2 files:
 # https://github.com/kkoutini/PaSST/tree/main/openmic
 
-dataset_dir = None
+_THIS_DIR = os.path.dirname(os.path.abspath(__file__))
+_REPO_ROOT = os.path.dirname(_THIS_DIR)
 
-assert dataset_dir is not None, "Specify OpenMic dataset location in variable 'dataset_dir'. " \
-                                "Check out the Readme file for further instructions. " \
-                                "https://github.com/fschmid56/EfficientAT/blob/main/README.md"
+# Backward-compatible default for the PaSST preprocessing layout.
+dataset_dir = "/tmp/PaSST/audioset_hdf5s/mp3"
 
-dataset_config = {
-    'openmic_train_hdf5': os.path.join(dataset_dir, "openmic_train.csv_mp3.hdf"),
-    'openmic_test_hdf5': os.path.join(dataset_dir, "openmic_test.csv_mp3.hdf"),
-    'num_of_classes': 20
-}
+
+def _unique_candidates(candidates):
+    seen = set()
+    unique = []
+    for candidate in candidates:
+        if not candidate:
+            continue
+        candidate = os.path.abspath(candidate)
+        if candidate in seen:
+            continue
+        seen.add(candidate)
+        unique.append(candidate)
+    return unique
+
+
+def _dataset_dir_candidates():
+    return _unique_candidates([
+        os.environ.get("EFFICIENTAT_OPENMIC_DIR"),
+        dataset_dir,
+        os.path.join(_REPO_ROOT, "PaSST", "audioset_hdf5s", "mp3"),
+        os.path.join(_REPO_ROOT, "datasets", "openmic"),
+        os.path.join(_REPO_ROOT, "openmic"),
+        os.path.join(_REPO_ROOT, "data", "openmic"),
+    ])
+
+
+def _resolve_hdf5_file(env_var_name, filename):
+    direct_path = os.environ.get(env_var_name)
+    candidates = _unique_candidates(
+        [direct_path] + [os.path.join(base_dir, filename) for base_dir in _dataset_dir_candidates()]
+    )
+    for candidate in candidates:
+        if os.path.isfile(candidate):
+            return candidate
+
+    raise FileNotFoundError(
+        f"Could not find OpenMic file '{filename}'. "
+        f"Set {env_var_name} directly, or set EFFICIENTAT_OPENMIC_DIR to the directory "
+        f"containing the OpenMic HDF5 files. Checked: {', '.join(candidates)}"
+    )
+
+
+@lru_cache(maxsize=1)
+def get_dataset_config():
+    return {
+        'openmic_train_hdf5': _resolve_hdf5_file(
+            "EFFICIENTAT_OPENMIC_TRAIN_HDF5", "openmic_train.csv_mp3.hdf"
+        ),
+        'openmic_test_hdf5': _resolve_hdf5_file(
+            "EFFICIENTAT_OPENMIC_TEST_HDF5", "openmic_test.csv_mp3.hdf"
+        ),
+        'num_of_classes': 20
+    }
+
+
+def validate_dataset_files():
+    return get_dataset_config()
 
 
 def decode_mp3(mp3_arr):
@@ -173,12 +226,14 @@ class AudioSetDataset(TorchDataset):
 
 
 def get_base_training_set(resample_rate=32000, gain_augment=0):
+    dataset_config = get_dataset_config()
     balanced_train_hdf5 = dataset_config['openmic_train_hdf5']
     ds = AudioSetDataset(balanced_train_hdf5, resample_rate=resample_rate, gain_augment=gain_augment)
     return ds
 
 
 def get_base_test_set(resample_rate=32000):
+    dataset_config = get_dataset_config()
     test_hdf5 = dataset_config['openmic_test_hdf5']
     ds = AudioSetDataset(test_hdf5, resample_rate=resample_rate)
     return ds
@@ -196,4 +251,3 @@ def get_training_set(roll=False, wavmix=False, gain_augment=0, resample_rate=320
 def get_test_set(resample_rate=32000):
     ds = get_base_test_set(resample_rate)
     return ds
-

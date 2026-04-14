@@ -7,7 +7,7 @@ import argparse
 from sklearn import metrics
 import torch.nn.functional as F
 
-from datasets.openmic import get_test_set, get_training_set
+from datasets.openmic import get_test_set, get_training_set, validate_dataset_files
 from models.mn.model import get_model as get_mobilenet
 from models.dymn.model import get_model as get_dymn
 from models.preprocess import AugmentMelSTFT
@@ -21,15 +21,7 @@ wandb = get_wandb()
 
 def train(args):
     # Train Models on OpenMic
-
-    # logging is done using wandb
-    wandb.init(
-        project="OpenMic",
-        notes="Fine-tune Models on OpenMic.",
-        tags=["OpenMic", "Instrument Recognition"],
-        config=args,
-        name=args.experiment_name
-    )
+    validate_dataset_files()
 
     device = torch.device('cuda') if args.cuda and torch.cuda.is_available() else torch.device('cpu')
 
@@ -77,6 +69,16 @@ def train(args):
                           worker_init_fn=worker_init_fn,
                           num_workers=args.num_workers,
                           batch_size=args.batch_size)
+
+    # logging is done using wandb
+    wandb.init(
+        project="OpenMic",
+        entity="xinyiy-yxy",
+        notes="Fine-tune Models on OpenMic.",
+        tags=["OpenMic", "Instrument Recognition"],
+        config=args,
+        name=args.experiment_name
+    )
 
     # optimizer & scheduler
     lr = args.lr

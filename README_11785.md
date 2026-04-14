@@ -181,9 +181,11 @@ export EFFICIENTAT_ESC50_DIR=~/datasets/ESC-50
 
 python ex_esc50.py --cuda --pretrained --model_name=mn10_as --fold=1
 
-python ex_esc50_pai_pretrained.py \
+EFFICIENTAT_ESC50_DIR=/home/xinyiy/datasets/ESC-50 python ex_esc50_pai_pretrained.py \
     --cuda --model_name=mn10_as --fold=1 \
-    --experiment_name=ESC50_PAI_pretrained
+    --perforated_bp \
+    --experiment_name=ESC50_PAI_pretrained_pbp
+
 
 python ex_esc50_pai_pretrained.py \
     --cuda --model_name=mn10_as --fold=1 \
@@ -218,3 +220,104 @@ EFFICIENTAT_ESC50_DIR=/home/xinyiy/datasets/ESC-50 python ex_esc50_perforated.py
   checkpoint: ESC50_PAI/backup/best_model.pt
   accuracy: 0.9575
   val_loss: 0.2698
+
+
+# Baseline Testing
+## OpenMic
+1. Dataset
+
+```bash
+conda activate idl_project
+conda install -c conda-forge ffmpeg -y
+pip install av h5py numpy
+
+cd /open_mic_data
+git clone https://github.com/kkoutini/PaSST.git
+cd PaSST/openmic/prepare_scripts
+python download_preprocess.py
+```
+
+If the processed files are not under the default PaSST path
+`/tmp/PaSST/audioset_hdf5s/mp3`, point the loader at the directory that
+contains `openmic_train.csv_mp3.hdf` and `openmic_test.csv_mp3.hdf`:
+
+```bash
+export EFFICIENTAT_OPENMIC_DIR=/open_mic_data/PaSST/audioset_hdf5s/mp3
+ls "$EFFICIENTAT_OPENMIC_DIR"/openmic_*_mp3.hdf
+```
+
+2. Training
+
+```bash
+cd /home/xinyiy/11-785_EfficientAT
+python ex_openmic.py --cuda --train --pretrained --model_name=mn10_as
+```
+
+#### `mn10_as`
+
+```bash
+EFFICIENTAT_OPENMIC_DIR=/home/xinyiy/11-785_EfficientAT/PaSST/audioset_hdf5s/mp3 \
+CUDA_VISIBLE_DEVICES=2 python ex_openmic.py --cuda --train --pretrained --model_name=mn10_as
+```
+
+#### `dymn10_as`
+
+```bash
+EFFICIENTAT_OPENMIC_DIR=/home/xinyiy/11-785_EfficientAT/PaSST/audioset_hdf5s/mp3 \
+CUDA_VISIBLE_DEVICES=2 python ex_openmic.py --cuda --train --pretrained --model_name=dymn10_as --lr=2e-5 --batch_size=32
+```
+
+## FSD50K
+1. Prepare the dataset
+
+### Download the dataset
+
+```bash
+mkdir -p /home/xinyiy/nas_jarvis_campus/FSD50K
+cd /home/xinyiy/nas_jarvis_campus/FSD50K
+
+wget -c "https://zenodo.org/records/4060432/files/FSD50K.ground_truth.zip?download=1" -O FSD50K.ground_truth.zip
+
+wget -c "https://zenodo.org/records/4060432/files/FSD50K.eval_audio.z01?download=1" -O FSD50K.eval_audio.z01
+wget -c "https://zenodo.org/records/4060432/files/FSD50K.eval_audio.zip?download=1" -O FSD50K.eval_audio.zip
+
+wget -c "https://zenodo.org/records/4060432/files/FSD50K.dev_audio.z01?download=1" -O FSD50K.dev_audio.z01
+wget -c "https://zenodo.org/records/4060432/files/FSD50K.dev_audio.z02?download=1" -O FSD50K.dev_audio.z02
+wget -c "https://zenodo.org/records/4060432/files/FSD50K.dev_audio.z03?download=1" -O FSD50K.dev_audio.z03
+wget -c "https://zenodo.org/records/4060432/files/FSD50K.dev_audio.z04?download=1" -O FSD50K.dev_audio.z04
+wget -c "https://zenodo.org/records/4060432/files/FSD50K.dev_audio.z05?download=1" -O FSD50K.dev_audio.z05
+wget -c "https://zenodo.org/records/4060432/files/FSD50K.dev_audio.zip?download=1" -O FSD50K.dev_audio.zip
+```
+
+### Combine the zip files and unzip
+
+```bash
+zip -s 0 FSD50K.dev_audio.zip --out FSD50K.dev_audio.full.zip
+unzip -n FSD50K.dev_audio.full.zip
+
+zip -s 0 FSD50K.eval_audio.zip --out FSD50K.eval_audio.full.zip
+unzip -n FSD50K.eval_audio.full.zip
+
+unzip -n FSD50K.ground_truth.zip
+```
+
+### Convert to mp3
+
+```bash
+cd /home/xinyiy/11-785_EfficientAT/PaSST/fsd50k/prepare_scripts
+python convert_to_mp3.py /home/xinyiy/nas_jarvis_campus/FSD50K/
+```
+
+### Convert to HDF5
+
+```bash
+cd /home/xinyiy/11-785_EfficientAT/PaSST/fsd50k/prepare_scripts
+python create_h5pymp3_dataset.py /home/xinyiy/nas_jarvis_campus/FSD50K/
+```
+
+### Training
+
+```bash
+cd /home/xinyiy/11-785_EfficientAT
+python ex_fsd50k.py --cuda --train --pretrained --model_name=mn10_as
+```
