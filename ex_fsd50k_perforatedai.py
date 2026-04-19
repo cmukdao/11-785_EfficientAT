@@ -234,6 +234,7 @@ def train(cfg: Config = default_config):
     oc = cfg.optim
     GPA.pai_tracker.set_optimizer(torch.optim.Adam)
     GPA.pai_tracker.set_scheduler(torch.optim.lr_scheduler.ReduceLROnPlateau)
+    GPA.pc.set_weight_decay_accepted(True)
     optim_args = {'params': model.parameters(), 'lr': oc.lr, 'weight_decay': oc.weight_decay}
     sched_args = {'mode': oc.scheduler_mode, 'patience': oc.scheduler_patience}
     optimizer, _ = GPA.pai_tracker.setup_optimizer(model, optim_args, sched_args)
@@ -323,7 +324,7 @@ def train(cfg: Config = default_config):
             "mAP": mAP,
             "ROC": ROC,
             "val_loss": val_loss,
-            "lr": optimizer.param_groups[0]["lr"],
+            "learning_rate": optimizer.param_groups[0]["lr"],
         })
 
         if name is not None:
