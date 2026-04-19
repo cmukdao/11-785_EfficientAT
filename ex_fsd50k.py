@@ -21,7 +21,9 @@ def train(args):
 
     # logging is done using wandb
     wandb.init(
+        entity="11-785_perforated_ai",
         project="FSD50K",
+        group=f"FSD50K-{args.model_name}",
         notes="Fine-tune Models on FSD50K.",
         tags=["FSDK50K", "Audio Tagging"],
         config=args,
