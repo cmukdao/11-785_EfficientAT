@@ -58,7 +58,7 @@ class PreprocessConfig:
 @dataclass
 class ModelConfig:
     pretrained: bool = True
-    model_name: str = "mn05_as"
+    model_name: str = "dymn04_as"
     pretrain_final_temp: float = 1.0  # DyMN only
     model_width: float = 1.0
     head_type: str = "mlp"
@@ -124,9 +124,26 @@ class PAIConfig:
     perforate_module_ids: Optional[List[str]] = None
 
     # Skip these dotted module ids even if a class/id filter would otherwise
-    # pick them up. The stem conv (`.features.0`) rarely benefits from
-    # dendrites per the skill's "top-layers only" guidance.
-    track_module_ids: Tuple[str, ...] = (".features.0",)
+    # pick them up. The stem conv rarely benefits from dendrites per the
+    # skill's "top-layers only" guidance. Covers both MN (`.features.0`) and
+    # DyMN (`.in_c`) naming conventions; PAI silently ignores ids that don't
+    # exist in the current model.
+    track_module_ids: Tuple[str, ...] = (".features.0", ".in_c")
+
+    # Class *names* to wrap as track-only (NOT perforated, gradients pass
+    # through cleanly). Use this for modules that PAI can't dendrite safely
+    # but also shouldn't walk into -- e.g. side-branch modules with their own
+    # norm layers. PAI's own warning recommends this route for any module
+    # flagged as "potentially found a norm Layer that wont be converted".
+    # Model-specific defaults (e.g. DyMN's `ContextGen`) are added in the
+    # training script via `_configure_pai`; this tuple appends extras.
+    track_module_names: Tuple[str, ...] = ()
+
+    # When True, silences PAI's "unwrapped modules found" warning + pdb break
+    # during `perforate_model`. Flip to True only after you've manually
+    # verified your `track_module_names`/`modules_to_perforate` cover every
+    # module you care about -- otherwise you lose the only safety net.
+    unwrapped_modules_confirmed: bool = False
 
     # ----------------------------------------------------------- correlation
     initial_correlation_batches: int = 8

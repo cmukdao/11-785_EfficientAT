@@ -47,43 +47,39 @@ from configs.fsd50k_pai_config import (
 os.environ["PAIEMAIL"] = PAI_EMAIL
 os.environ["PAITOKEN"] = PAI_TOKEN
 
-import wandb  # noqa: E402
-import numpy as np  # noqa: E402
-from tqdm import tqdm  # noqa: E402
-import torch  # noqa: E402
-from torch.utils.data import DataLoader  # noqa: E402
-from sklearn import metrics  # noqa: E402
-import torch.nn.functional as F  # noqa: E402
+import wandb  
+import numpy as np  
+from tqdm import tqdm  
+import torch  
+from torch.utils.data import DataLoader  
+from sklearn import metrics  
+import torch.nn.functional as F  
 
-from datasets.fsd50k import get_valid_set, get_training_set  # noqa: E402
-from models.mn.model import get_model as get_mobilenet  # noqa: E402
-from models.mn.block_types import InvertedResidual  # noqa: E402
-from models.dymn.model import get_model as get_dymn  # noqa: E402
-from models.preprocess import AugmentMelSTFT  # noqa: E402
-from helpers.init import worker_init_fn  # noqa: E402
-from helpers.utils import NAME_TO_WIDTH, mixup  # noqa: E402
+from datasets.fsd50k import get_valid_set, get_training_set  
+from models.mn.model import get_model as get_mobilenet  
+from models.mn.block_types import InvertedResidual  
+from models.dymn.model import get_model as get_dymn  
+from models.dymn.dy_block import (  
+    DY_Block,
+    ContextGen,
+    CoordAtt,
+    DyReLUB,
+    DynamicWrapper,
+)
+from models.preprocess import AugmentMelSTFT  
+from helpers.init import worker_init_fn  
+from helpers.utils import NAME_TO_WIDTH, mixup  
 
-from torchvision.ops.misc import Conv2dNormActivation  # noqa: E402
+from torchvision.ops.misc import Conv2dNormActivation  
 
-from perforatedai import globals_perforatedai as GPA  # noqa: E402
-from perforatedai import utils_perforatedai as UPA  # noqa: E402
+from perforatedai import globals_perforatedai as GPA  
+from perforatedai import utils_perforatedai as UPA  
 import perforatedbp  # noqa: F401,E402  (imported for side effects / license check)
 
 
 # ----------------------------------------------------------------------------
 # PAI API compatibility shim
 # ----------------------------------------------------------------------------
-# PAI renamed three config vars between releases:
-#   old name                       ->  new name
-#   modules_to_convert             ->  modules_to_perforate
-#   module_names_to_convert        ->  module_names_to_perforate
-#   module_ids_to_convert          ->  module_ids_to_perforate
-#
-# `PAIConfig.__getattr__` silently swallows unknown setters with an
-# "Ignoring append attempt" log, so calling the wrong name is a no-op -- not
-# an error. We alias the missing direction onto the existing one exactly
-# once, then the rest of the code can call the canonical new-API names
-# regardless of which library version is installed.
 def _install_pai_name_aliases() -> None:
     pc = GPA.pc
     renames = {
@@ -106,6 +102,42 @@ def _install_pai_name_aliases() -> None:
 
 
 _install_pai_name_aliases()
+
+
+# ----------------------------------------------------------------------------
+# Per-model block registration
+# ----------------------------------------------------------------------------
+def _select_pai_blocks_for_model(model_name: str):
+    """Return ``(perforate_classes, perforate_names, track_names)`` for this backbone.
+
+    * ``perforate_classes`` / ``perforate_names``: block classes wrapped as
+      ``PAINeuronModule`` (get dendrites). Registered both by class object
+      AND by short class name for robustness against duplicate imports.
+    * ``track_names``: side-branch class names wrapped as ``TrackedNeuronModule``
+      (no dendrites, but gradients flow and PAI stops flagging their inner
+      norm layers as "unwrapped").
+
+    MN (MobileNet): blocks are `InvertedResidual`; stem/head are
+    `Conv2dNormActivation`. Nothing to track beyond the stem id.
+
+    DyMN (Dynamic MobileNet): blocks are `DY_Block`; stem/head are
+    `Conv2dNormActivation`. The inner side-branch modules
+    (`ContextGen`, `CoordAtt`, `DyReLUB`, `DynamicWrapper`) are wrapped INSIDE
+    `DY_Block` so they don't normally need explicit tracking -- but we add
+    them as track-only anyway so that any future partial-perforation
+    configuration (e.g. ``perforate_module_ids`` excluding some `DY_Block`s)
+    still doesn't trip the "unwrapped norm" warning on their internals.
+    """
+    family = model_name.lower()
+    if family.startswith("dymn"):
+        perforate_classes = [DY_Block, Conv2dNormActivation]
+        perforate_names = ["DY_Block", "Conv2dNormActivation"]
+        track_names = ["ContextGen", "CoordAtt", "DyReLUB", "DynamicWrapper"]
+    else:
+        perforate_classes = [InvertedResidual, Conv2dNormActivation]
+        perforate_names = ["InvertedResidual", "Conv2dNormActivation"]
+        track_names = []
+    return perforate_classes, perforate_names, track_names
 
 
 # ----------------------------------------------------------------------------
@@ -141,16 +173,20 @@ def _configure_pai(cfg: Config, save_name: str) -> None:
     GPA.pc.set_initial_correlation_batches(pai.initial_correlation_batches)
 
     # --- Module selection ---------------------------------------------------
-    # Perforate every InvertedResidual block as a single unit, plus the final
-    # 1x1 Conv2dNormActivation. The library-default name list already
-    # contains PAISequential/Conv1d/Conv2d/Conv3d/Linear, which covers the
-    # classifier Linear layers.
+    # Block-level perforation: wrap each residual block as a single
+    # PAINeuronModule (rather than dendriting its inner Conv2d/Linear layers
+    # individually). The library-default name list already contains
+    # PAISequential/Conv1d/Conv2d/Conv3d/Linear, which covers the classifier
+    # Linears in both backbones.
     #
     # We register by class object AND by class-name string: the class-identity
     # check in PAI can miss when the same class is imported via two paths
     # (e.g. torchvision re-exports), but the short-name string match still hits.
-    GPA.pc.append_modules_to_perforate([InvertedResidual, Conv2dNormActivation])
-    GPA.pc.append_module_names_to_perforate(["InvertedResidual", "Conv2dNormActivation"])
+    perforate_classes, perforate_names, track_names = _select_pai_blocks_for_model(
+        cfg.model.model_name
+    )
+    GPA.pc.append_modules_to_perforate(perforate_classes)
+    GPA.pc.append_module_names_to_perforate(perforate_names)
 
     # Optional extras by class name
     if pai.extra_module_names_to_perforate:
@@ -161,10 +197,24 @@ def _configure_pai(cfg: Config, save_name: str) -> None:
     if pai.perforate_module_ids:
         GPA.pc.append_module_ids_to_perforate(list(pai.perforate_module_ids))
 
-    # Skip the stem conv (and any other tracked-only ids) -- tracked means
+    # Skip specific dotted module ids (stem etc.) -- tracked means
     # "don't add dendrites here, but do keep gradients flowing through".
     if pai.track_module_ids:
         GPA.pc.append_module_ids_to_track(list(pai.track_module_ids))
+
+    # Track-only class names: PAI will wrap these as `TrackedNeuronModule`
+    # (no dendrites, but children no longer flagged as "unwrapped norm").
+    # Use this for side-branch modules with internal BatchNorm layers that
+    # PAI cannot safely dendrite -- DyMN's `ContextGen` is the archetype.
+    # The model-family defaults come from `_select_pai_blocks_for_model`.
+    all_track_names = list(track_names) + list(pai.track_module_names)
+    if all_track_names:
+        GPA.pc.append_module_names_to_track(all_track_names)
+
+    # Silence the "unwrapped modules" pdb break once the user has audited
+    # their registration and confirmed all unwrapped params are intentional.
+    if pai.unwrapped_modules_confirmed:
+        GPA.pc.set_unwrapped_modules_confirmed(True)
 
     # --- Switch mode --------------------------------------------------------
     if pai.switch_mode == "fixed":
