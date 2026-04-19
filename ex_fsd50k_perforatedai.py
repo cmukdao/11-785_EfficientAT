@@ -1,17 +1,33 @@
 """
-FSD50K fine-tuning with Perforated AI Dendrites (+ optional Perforated BP).
-
-Mirrors `ex_esc50_perforatedai.py`, but:
-  * targets the multi-label FSD50K dataset (200 classes),
-  * optimizes a sigmoid + BCEWithLogits head,
-  * uses mean Average Precision (mAP) as the PAI validation score, and
-  * pulls every hyperparameter from `configs/fsd50k_pai_config.py` instead of argparse.
+FSD50K fine-tuning with Perforated AI Dendrites.
 
 Usage:
     python ex_fsd50k_perforatedai.py
 
-To tweak settings, edit `configs/fsd50k_pai_config.py` (or construct your
-own `Config` instance and call `train(config)` directly).
+Architecture target (mn10_as, width_mult=1.0):
+  Input  (1 channel mel spectrogram)
+    |
+  features[0]            Conv2dNormActivation (stem, 1->8)       [tracked only]
+    |
+  features[1..3]         InvertedResidual  (early: 8 -> 16 -> 24) [perforated]
+  features[4..6]         InvertedResidual  (early: 24 -> 24)      [perforated]
+  features[7..10]        InvertedResidual  (middle: 24 -> 40)     [perforated]
+  features[11..12]       InvertedResidual  (later: 40 -> 56)      [perforated]
+  features[13..15]       InvertedResidual  (later: 56 -> 80)      [perforated]
+  features[16]           Conv2dNormActivation (final 1x1, 80->480)[perforated]
+    |
+  classifier.0..1        AvgPool2d + Flatten                      [no params]
+  classifier.2 (Linear)  480 -> 640                               [perforated]
+  classifier.3..4        Hardswish + Dropout                      [no params]
+  classifier.5 (Linear)  640 -> 200 (logits)                      [perforated]
+
+Dendrite conversion happens at the InvertedResidual-block level (skill
+step 7.2): the 1x1 expand, depthwise conv, SE attention, and 1x1 project
+inside each block are wrapped together rather than individually. For a
+parameter-efficient run restricted to the "Later blocks + Final conv +
+Classifier" region, set `config.pai.perforate_module_ids = list(
+TOP_ONLY_MODULE_IDS)` in the config module (covers features[11..16] and
+both classifier Linears).
 
 PAI reference: https://www.perforatedai.com/docs
 """
@@ -22,11 +38,11 @@ from configs.fsd50k_pai_config import (
     PAI_EMAIL,
     PAI_TOKEN,
     config as default_config,
+    make_fsd50k_config,
 )
 
 # ============================================================================
-# PERFORATED AI LICENSE CREDENTIALS
-# Must be set BEFORE importing perforatedai.
+# Perforated AI license credentials -- must be set BEFORE importing perforatedai
 # ============================================================================
 os.environ["PAIEMAIL"] = PAI_EMAIL
 os.environ["PAITOKEN"] = PAI_TOKEN
@@ -41,10 +57,13 @@ import torch.nn.functional as F  # noqa: E402
 
 from datasets.fsd50k import get_valid_set, get_training_set  # noqa: E402
 from models.mn.model import get_model as get_mobilenet  # noqa: E402
+from models.mn.block_types import InvertedResidual  # noqa: E402
 from models.dymn.model import get_model as get_dymn  # noqa: E402
 from models.preprocess import AugmentMelSTFT  # noqa: E402
 from helpers.init import worker_init_fn  # noqa: E402
 from helpers.utils import NAME_TO_WIDTH, mixup  # noqa: E402
+
+from torchvision.ops.misc import Conv2dNormActivation  # noqa: E402
 
 from perforatedai import globals_perforatedai as GPA  # noqa: E402
 from perforatedai import utils_perforatedai as UPA  # noqa: E402
@@ -52,25 +71,102 @@ import perforatedbp  # noqa: F401,E402  (imported for side effects / license che
 
 
 # ----------------------------------------------------------------------------
+# PAI API compatibility shim
+# ----------------------------------------------------------------------------
+# PAI renamed three config vars between releases:
+#   old name                       ->  new name
+#   modules_to_convert             ->  modules_to_perforate
+#   module_names_to_convert        ->  module_names_to_perforate
+#   module_ids_to_convert          ->  module_ids_to_perforate
+#
+# `PAIConfig.__getattr__` silently swallows unknown setters with an
+# "Ignoring append attempt" log, so calling the wrong name is a no-op -- not
+# an error. We alias the missing direction onto the existing one exactly
+# once, then the rest of the code can call the canonical new-API names
+# regardless of which library version is installed.
+def _install_pai_name_aliases() -> None:
+    pc = GPA.pc
+    renames = {
+        "modules_to_perforate": "modules_to_convert",
+        "module_names_to_perforate": "module_names_to_convert",
+        "module_ids_to_perforate": "module_ids_to_convert",
+    }
+    for new, old in renames.items():
+        have_new = hasattr(pc, f"_{new}")
+        have_old = hasattr(pc, f"_{old}")
+        src, dst = (old, new) if have_old and not have_new else \
+                   (new, old) if have_new and not have_old else (None, None)
+        if src is None:
+            continue
+        for prefix in ("get_", "set_", "append_"):
+            fn = getattr(pc, f"{prefix}{src}", None)
+            if callable(fn):
+                setattr(pc, f"{prefix}{dst}", fn)
+    print(f"[PAI] installed name aliases (api={'new' if hasattr(pc, '_modules_to_perforate') else 'old'})")
+
+
+_install_pai_name_aliases()
+
+
+# ----------------------------------------------------------------------------
 # PAI configuration
 # ----------------------------------------------------------------------------
-def _configure_pai(cfg: Config):
+def _configure_pai(cfg: Config, save_name: str) -> None:
+    """Apply every PAI setting BEFORE `UPA.perforate_model` runs.
+
+    Per the skill, all `GPA.pc.set_*`/`append_*` calls must happen before
+    `perforate_model` -- otherwise the tracker reads stale defaults when it
+    walks the module tree.
+    """
     pai = cfg.pai
 
-    GPA.pc.set_testing_dendrite_capacity(not pai.no_dendrite_test)
+    # --- Save name first so auto-save/auto-load points at THIS experiment. --
+    # (PAIConfig.__init__ auto-loads `{cwd}/{save_name}/{save_name}_config.json`
+    #  at import time; without this, stale JSON from a different run can
+    #  silently override Python defaults.)
+    GPA.pc.set_save_name(save_name)
+
+    # --- Master switches ----------------------------------------------------
+    GPA.pc.set_testing_dendrite_capacity(pai.testing_dendrite_capacity)
     GPA.pc.set_perforated_backpropagation(pai.perforated_bp)
     GPA.pc.set_verbose(pai.verbose)
-    GPA.pc.set_dendrite_update_mode(True)
 
-    # Channel (neuron) dimension is index 1 for NCHW MobileNet features.
+    # --- Tensor layout for NCHW conv features (channel dim = index 1) ------
     GPA.pc.set_output_dimensions(list(pai.output_dimensions))
-    GPA.pc.set_input_dimensions(list(pai.input_dimensions))
 
-    GPA.pc.set_initial_correlation_batches(pai.initial_correlation_batches)
-    GPA.pc.set_debugging_output_dimensions(pai.debugging_output_dimensions)
+    # --- File + correlation knobs ------------------------------------------
     GPA.pc.set_using_safe_tensors(pai.using_safe_tensors)
+    # `set_initial_correlation_batches` is a PBP-only variable; when PBP
+    # isn't imported it's swallowed as a no-op by PAIConfig.__getattr__.
+    GPA.pc.set_initial_correlation_batches(pai.initial_correlation_batches)
 
-    # Switch mode: fixed schedule vs. adaptive (history) plateau detection.
+    # --- Module selection ---------------------------------------------------
+    # Perforate every InvertedResidual block as a single unit, plus the final
+    # 1x1 Conv2dNormActivation. The library-default name list already
+    # contains PAISequential/Conv1d/Conv2d/Conv3d/Linear, which covers the
+    # classifier Linear layers.
+    #
+    # We register by class object AND by class-name string: the class-identity
+    # check in PAI can miss when the same class is imported via two paths
+    # (e.g. torchvision re-exports), but the short-name string match still hits.
+    GPA.pc.append_modules_to_perforate([InvertedResidual, Conv2dNormActivation])
+    GPA.pc.append_module_names_to_perforate(["InvertedResidual", "Conv2dNormActivation"])
+
+    # Optional extras by class name
+    if pai.extra_module_names_to_perforate:
+        GPA.pc.append_module_names_to_perforate(list(pai.extra_module_names_to_perforate))
+
+    # Optional: restrict conversion to specific dotted module ids only.
+    # When set, PAI only perforates these exact ids.
+    if pai.perforate_module_ids:
+        GPA.pc.append_module_ids_to_perforate(list(pai.perforate_module_ids))
+
+    # Skip the stem conv (and any other tracked-only ids) -- tracked means
+    # "don't add dendrites here, but do keep gradients flowing through".
+    if pai.track_module_ids:
+        GPA.pc.append_module_ids_to_track(list(pai.track_module_ids))
+
+    # --- Switch mode --------------------------------------------------------
     if pai.switch_mode == "fixed":
         GPA.pc.set_switch_mode(GPA.pc.DOING_FIXED_SWITCH)
         GPA.pc.set_fixed_switch_num(pai.fixed_switch_num)
@@ -84,13 +180,16 @@ def _configure_pai(cfg: Config):
     GPA.pc.set_cap_at_n(pai.cap_at_n)
     GPA.pc.set_max_dendrites(pai.max_dendrites)
 
+    # --- Validation smoothing ----------------------------------------------
     GPA.pc.set_running_average_pb(pai.running_average_pb)
 
+    # --- Improvement thresholds --------------------------------------------
     GPA.pc.set_pai_improvement_threshold(pai.pai_improvement_threshold)
     GPA.pc.set_pai_improvement_threshold_raw(pai.pai_improvement_threshold_raw)
     GPA.pc.set_improvement_threshold(pai.improvement_threshold)
     GPA.pc.set_improvement_threshold_raw(pai.improvement_threshold_raw)
 
+    # --- Candidate dendrite init + stability -------------------------------
     GPA.pc.set_candidate_weight_initialization_multiplier(
         pai.candidate_weight_initialization_multiplier
     )
@@ -98,41 +197,75 @@ def _configure_pai(cfg: Config):
     GPA.pc.set_drawing_extra_graphs(pai.drawing_extra_graphs)
 
 
-def _reapply_pai_thresholds(cfg: Config):
-    """PAI's initialize_pai() may reset thresholds; re-apply the important ones."""
+def _reapply_validation_thresholds(cfg: Config) -> None:
+    """`perforate_model` overwrites some thresholds; re-assert them.
+
+    Observed PAI quirk: running_average_pb and the four improvement
+    thresholds are reset to library defaults during tracker initialization.
+    They must be re-applied AFTER `perforate_model` to stick for training.
+    """
     pai = cfg.pai
-    if hasattr(GPA.pc, "set_running_average_pb"):
-        GPA.pc.set_running_average_pb(pai.running_average_pb)
-    if hasattr(GPA.pc, "set_improvement_threshold"):
-        GPA.pc.set_improvement_threshold(pai.improvement_threshold)
-    if hasattr(GPA.pc, "set_improvement_threshold_raw"):
-        GPA.pc.set_improvement_threshold_raw(pai.improvement_threshold_raw)
-    if hasattr(GPA.pc, "set_pai_improvement_threshold"):
-        GPA.pc.set_pai_improvement_threshold(pai.pai_improvement_threshold)
-    if hasattr(GPA.pc, "set_pai_improvement_threshold_raw"):
-        GPA.pc.set_pai_improvement_threshold_raw(pai.pai_improvement_threshold_raw)
+    GPA.pc.set_running_average_pb(pai.running_average_pb)
+    GPA.pc.set_improvement_threshold(pai.improvement_threshold)
+    GPA.pc.set_improvement_threshold_raw(pai.improvement_threshold_raw)
+    GPA.pc.set_pai_improvement_threshold(pai.pai_improvement_threshold)
+    GPA.pc.set_pai_improvement_threshold_raw(pai.pai_improvement_threshold_raw)
 
 
-def _register_mobilenet_pai_blocks(model):
-    """Tell PAI which submodule classes are eligible for dendrite conversion."""
-    convnorm_type = type(model.features[0])   # Conv2dNormActivation
-    invres_type = type(model.features[1])     # InvertedResidual
-    GPA.pc.append_modules_to_convert([convnorm_type, invres_type])
-    return model
+def _perforate_model(model, save_name: str, maximizing_score: bool):
+    """Call `UPA.perforate_model` (canonical name, per skill + source).
+
+    Falls back to the legacy `initialize_pai` alias only if `perforate_model`
+    is not present on this install.
+    """
+    if hasattr(UPA, "perforate_model"):
+        return UPA.perforate_model(
+            model,
+            doing_pai=True,
+            save_name=save_name,
+            maximizing_score=maximizing_score,
+        )
+    return UPA.initialize_pai(
+        model,
+        doing_pai=True,
+        save_name=save_name,
+        maximizing_score=maximizing_score,
+    )
+
+
+def _report_dendrite_targets(model) -> None:
+    """Print the modules PAI wrapped so the user can visually confirm."""
+    try:
+        pai_modules = UPA.get_pai_modules(model, 0)
+    except Exception:
+        return
+    if not pai_modules:
+        print("[PAI] WARNING: no PAINeuronModules were registered. "
+              "Check `module_names_to_perforate` / `modules_to_perforate` / "
+              "`module_ids_to_perforate`.")
+        return
+    print(f"[PAI] Registered {len(pai_modules)} dendrite-eligible modules:")
+    for m in pai_modules:
+        main_type = type(getattr(m, "main_module", m)).__name__
+        print(f"  - {m.name:40s}  ({main_type})")
 
 
 # ----------------------------------------------------------------------------
 # Training
 # ----------------------------------------------------------------------------
 def train(cfg: Config = default_config):
+    pai_save_dir = os.path.join("pai", cfg.experiment_name)
+    os.makedirs(pai_save_dir, exist_ok=True)
+    os.makedirs(os.path.join(pai_save_dir, "pai"), exist_ok=True)
+
     wandb.init(
         entity=cfg.wandb.entity,
         project=cfg.wandb.project,
+        name=cfg.wandb.name,
         group=cfg.wandb.group,
         notes=cfg.wandb.notes,
         tags=list(cfg.wandb.tags),
         config=_config_as_dict(cfg),
-        name=cfg.experiment_name,
     )
 
     device = torch.device('cuda') if cfg.cuda and torch.cuda.is_available() else torch.device('cpu')
@@ -143,20 +276,14 @@ def train(cfg: Config = default_config):
 
     pp = cfg.preprocess
     mel = AugmentMelSTFT(
-        n_mels=pp.n_mels,
-        sr=pp.resample_rate,
-        win_length=pp.window_size,
-        hopsize=pp.hop_size,
-        n_fft=pp.n_fft,
-        freqm=pp.freqm,
-        timem=pp.timem,
-        fmin=pp.fmin,
-        fmax=pp.fmax,
-        fmin_aug_range=pp.fmin_aug_range,
-        fmax_aug_range=pp.fmax_aug_range,
-    )
-    mel.to(device)
+        n_mels=pp.n_mels, sr=pp.resample_rate,
+        win_length=pp.window_size, hopsize=pp.hop_size, n_fft=pp.n_fft,
+        freqm=pp.freqm, timem=pp.timem,
+        fmin=pp.fmin, fmax=pp.fmax,
+        fmin_aug_range=pp.fmin_aug_range, fmax_aug_range=pp.fmax_aug_range,
+    ).to(device)
 
+    # ---------------- Build the (un-perforated) model first ---------------
     mc = cfg.model
     model_name = mc.model_name
     pretrained_name = model_name if mc.pretrained else None
@@ -176,21 +303,16 @@ def train(cfg: Config = default_config):
             se_dims=mc.se_dims,
             num_classes=mc.num_classes,
         )
-    model = _register_mobilenet_pai_blocks(model)
 
-    _configure_pai(cfg)
-
-    pai_output_dir = os.path.join("pai", cfg.experiment_name)
-    os.makedirs(pai_output_dir, exist_ok=True)
-    os.makedirs(os.path.join(pai_output_dir, "pai"), exist_ok=True)
-
-    model = UPA.initialize_pai(
+    # ---------------- Configure PAI, THEN perforate the model --------------
+    _configure_pai(cfg, save_name=pai_save_dir)
+    model = _perforate_model(
         model,
-        doing_pai=True,
-        save_name=pai_output_dir,
-        maximizing_score=True,
+        save_name=pai_save_dir,
+        maximizing_score=True,  # mAP is "higher is better"
     )
-    _reapply_pai_thresholds(cfg)
+    _reapply_validation_thresholds(cfg)
+    _report_dendrite_targets(model)
 
     model.to(device)
 
@@ -199,7 +321,7 @@ def train(cfg: Config = default_config):
     print(f"param_count: {total_params}")
     print(f"trainable_param_count: {trainable_params}")
 
-    # -- Data loaders -------------------------------------------------------
+    # ---------------- Data loaders -----------------------------------------
     dc = cfg.data
     dl = DataLoader(
         dataset=get_training_set(
@@ -230,22 +352,19 @@ def train(cfg: Config = default_config):
         prefetch_factor=cfg.num_workers // 2 if cfg.num_workers > 0 else None,
     )
 
-    # -- PAI-managed optimizer + scheduler ----------------------------------
+    # ---------------- PAI-managed optimizer + scheduler --------------------
     oc = cfg.optim
     GPA.pai_tracker.set_optimizer(torch.optim.Adam)
     GPA.pai_tracker.set_scheduler(torch.optim.lr_scheduler.ReduceLROnPlateau)
-    GPA.pc.set_weight_decay_accepted(True)
     optim_args = {'params': model.parameters(), 'lr': oc.lr, 'weight_decay': oc.weight_decay}
     sched_args = {'mode': oc.scheduler_mode, 'patience': oc.scheduler_patience}
     optimizer, _ = GPA.pai_tracker.setup_optimizer(model, optim_args, sched_args)
 
-    # -- Training loop ------------------------------------------------------
+    # ---------------- Training loop ----------------------------------------
     name = None
     mAP, ROC, val_loss = float('NaN'), float('NaN'), float('NaN')
     train_loss_epoch = float('NaN')
-
-    best_val_mAP = float("-inf")
-    best_val_epoch = -1
+    best_val_mAP, best_val_epoch = float("-inf"), -1
 
     epoch = -1
     while True:
@@ -261,7 +380,7 @@ def train(cfg: Config = default_config):
         )
 
         for batch in pbar:
-            x, f, y = batch
+            x, _, y = batch
             bs = x.size(0)
             x, y = x.to(device, non_blocking=True), y.to(device, non_blocking=True)
 
@@ -302,18 +421,18 @@ def train(cfg: Config = default_config):
 
         train_loss_epoch = float(np.mean(train_loss_list)) if train_loss_list else float('NaN')
 
-        # Train-loss trace for PAI graphs (negate so "higher is better" still holds
-        # on the extra-score axis; PAI treats these as informational).
+        # Train-loss trace for PAI graphs. Negated so "higher = better" still
+        # holds on the extra-score axis (PAI treats these as informational).
         GPA.pai_tracker.add_extra_score(-train_loss_epoch, "NegTrainLoss")
         model.to(device)
 
-        mAP, ROC, val_loss, n_val = _test(model, mel, valid_dl, device)
+        mAP, ROC, val_loss, _ = _test(model, mel, valid_dl, device)
 
         if mAP > best_val_mAP:
             best_val_mAP = mAP
             best_val_epoch = epoch
 
-        # PAI drives switching and "training complete" off mAP on the 0-100 scale.
+        # PAI drives switching + "training complete" off mAP on the 0-100 scale.
         model, restructured, training_complete = GPA.pai_tracker.add_validation_score(
             mAP * 100.0, model
         )
@@ -347,7 +466,8 @@ def train(cfg: Config = default_config):
             )
             break
         elif restructured:
-            # Topology changed: optimizer state is stale, rebuild.
+            # Topology changed: optimizer state is stale, rebuild with the
+            # EXACT SAME args (skill Step 7 requirement).
             optim_args = {'params': model.parameters(), 'lr': oc.lr, 'weight_decay': oc.weight_decay}
             sched_args = {'mode': oc.scheduler_mode, 'patience': oc.scheduler_patience}
             optimizer, _ = GPA.pai_tracker.setup_optimizer(model, optim_args, sched_args)
@@ -386,14 +506,12 @@ def _test(model, mel, eval_loader, device):
     targets = np.concatenate(targets)
     outputs = np.concatenate(outputs)
     losses = np.stack(losses)
-    # Per-class mAP then averaged; matches the original FSD50K recipe.
     mAP = metrics.average_precision_score(targets, outputs, average=None)
     ROC = metrics.roc_auc_score(targets, outputs, average=None)
     return float(mAP.mean()), float(ROC.mean()), float(losses.mean()), int(targets.shape[0])
 
 
 def _config_as_dict(cfg: Config) -> dict:
-    """Flatten dataclass config for wandb logging."""
     from dataclasses import asdict
     return asdict(cfg)
 
