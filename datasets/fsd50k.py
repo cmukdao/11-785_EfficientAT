@@ -16,7 +16,7 @@ from datasets.helpers.audiodatasets import PreprocessDataset, get_roll_func
 # follow the instructions here to get these 3 files:
 # https://github.com/kkoutini/PaSST/tree/main/fsd50k
 
-dataset_dir = None
+dataset_dir = "datasets/fsd50k"
 
 assert dataset_dir is not None, "Specify FSD50K dataset location in variable 'dataset_dir'. " \
                                 "Check out the Readme file for further instructions. " \
