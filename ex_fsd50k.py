@@ -86,15 +86,28 @@ def train(args):
     scheduler = torch.optim.lr_scheduler.LambdaLR(optimizer, schedule_lambda)
 
     name = None
+    best_name = None
     mAP, ROC, val_loss = float('NaN'), float('NaN'), float('NaN')
 
-    for epoch in range(args.n_epochs):
+    # Early stopping state: stop when validation mAP has not improved
+    # for `args.patience` consecutive epochs.
+    best_mAP = float('-inf')
+    best_epoch = -1
+    epochs_since_improvement = 0
+
+    # `args.n_epochs` acts as a hard upper bound; set to <= 0 to train
+    # until early stopping triggers.
+    max_epochs = args.n_epochs if args.n_epochs and args.n_epochs > 0 else int(1e9)
+
+    epoch = 0
+    while epoch < max_epochs:
         mel.train()
         model.train()
         train_stats = dict(train_loss=list())
         pbar = tqdm(dl)
-        pbar.set_description("Epoch {}/{}: mAP: {:.4f}, val_loss: {:.4f}"
-                             .format(epoch + 1, args.n_epochs, mAP, val_loss))
+        pbar.set_description("Epoch {} (best mAP: {:.4f} @ ep {}, no-improve: {}/{})"
+                             .format(epoch + 1, best_mAP if best_mAP > float('-inf') else 0.0,
+                                     best_epoch + 1, epochs_since_improvement, args.patience))
         for batch in pbar:
             x, f, y = batch
             bs = x.size(0)
@@ -129,19 +142,51 @@ def train(args):
         # evaluate
         mAP, ROC, val_loss = _test(model, mel, valid_dl, device)
 
+        # Early-stopping bookkeeping based on validation mAP.
+        improved = mAP > best_mAP + args.min_delta
+        if improved:
+            best_mAP = mAP
+            best_epoch = epoch
+            epochs_since_improvement = 0
+        else:
+            epochs_since_improvement += 1
+
         # log train and validation statistics
         wandb.log({"train_loss": np.mean(train_stats['train_loss']),
                    "learning_rate": scheduler.get_last_lr()[0],
                    "mAP": mAP,
                    "ROC": ROC,
-                   "val_loss": val_loss
+                   "val_loss": val_loss,
                    })
 
         # remove previous model (we try to not flood your hard disk) and save latest model
-        if name is not None:
-            os.remove(os.path.join(wandb.run.dir, name))
+        if name is not None and name != best_name:
+            prev_path = os.path.join(wandb.run.dir, name)
+            if os.path.exists(prev_path):
+                os.remove(prev_path)
         name = f"mn{str(width).replace('.', '')}_fsd50k_epoch_{epoch}_mAP_{int(round(mAP*1000))}.pt"
         torch.save(model.state_dict(), os.path.join(wandb.run.dir, name))
+
+        # Always keep the best checkpoint on disk alongside the latest.
+        if improved:
+            if best_name is not None and best_name != name:
+                prev_best_path = os.path.join(wandb.run.dir, best_name)
+                if os.path.exists(prev_best_path):
+                    os.remove(prev_best_path)
+            best_name = name
+
+        # Early-stopping trigger.
+        if epochs_since_improvement >= args.patience:
+            print(f"Early stopping at epoch {epoch + 1}: validation mAP has not "
+                  f"improved for {args.patience} epochs "
+                  f"(best mAP {best_mAP:.4f} at epoch {best_epoch + 1}).")
+            break
+
+        epoch += 1
+
+    wandb.run.summary["best_mAP"] = best_mAP
+    wandb.run.summary["best_epoch"] = best_epoch + 1
+    wandb.run.summary["stopped_epoch"] = epoch + 1
 
 
 def _mel_forward(x, mel):
@@ -264,7 +309,14 @@ if __name__ == '__main__':
     parser.add_argument('--model_width', type=float, default=1.0)
     parser.add_argument('--head_type', type=str, default="mlp")
     parser.add_argument('--se_dims', type=str, default="c")
-    parser.add_argument('--n_epochs', type=int, default=80)
+    parser.add_argument('--n_epochs', type=int, default=80,
+                        help="Hard upper bound on number of training epochs. "
+                             "Set to 0 or negative to train until early stopping triggers.")
+    parser.add_argument('--patience', type=int, default=10,
+                        help="Early stopping patience: stop if validation mAP does "
+                             "not improve for this many consecutive epochs.")
+    parser.add_argument('--min_delta', type=float, default=0.0,
+                        help="Minimum mAP improvement to reset the early-stopping counter.")
     parser.add_argument('--mixup_alpha', type=float, default=0.3)
     parser.add_argument('--no_roll', action='store_true', default=False)
     parser.add_argument('--no_wavmix', action='store_true', default=False)
