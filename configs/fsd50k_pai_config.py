@@ -136,8 +136,8 @@ class PAIConfig:
     switch_mode: str = "history"           # "fixed" | "history"
     fixed_switch_num: int = 5            # epochs between dendrite switches
     first_fixed_switch_num: int = 15     # epochs before the first switch
-    n_epochs_to_switch: int = 20         # history: neuron plateau window
-    p_epochs_to_switch: int = 10         # history: dendrite plateau window
+    n_epochs_to_switch: int = 10         # history: neuron plateau window
+    p_epochs_to_switch: int = 5         # history: dendrite plateau window
     history_lookback: int = 1
 
     # --------------------------------------------------------- dendrite caps
