@@ -47,7 +47,7 @@ class PreprocessConfig:
 @dataclass
 class ModelConfig:
     pretrained: bool = True
-    model_name: str = "dymn04_as"
+    model_name: str = "mn04_as"
     pretrain_final_temp: float = 1.0  # DyMN only
     model_width: float = 1.0
     head_type: str = "mlp"
@@ -63,7 +63,7 @@ class DataConfig:
     gain_augment: int = 12
     variable_eval_length: bool = False  # True => val/eval batch_size forced to 1
     # DataLoader
-    batch_size: int = 32
+    batch_size: int = 64
     num_workers: int = 8
 
 
@@ -85,7 +85,7 @@ class PAIConfig:
 
     # ------------------------------------------------------------------ master
     perforated_bp: bool = True
-    testing_dendrite_capacity: bool = True
+    testing_dendrite_capacity: bool = False
     verbose: bool = False
 
     # ------------------------------------------------------- tensor dimensions
@@ -216,23 +216,6 @@ class WandbConfig:
         "Dendrites",
         "PerforatedAI",
     )
-
-
-# Convenience: "top-only" id list matching the "Later blocks + Final conv +
-# Classifier" region of mn10_as (40 -> 56 -> 80 -> 480 -> 640 -> 200).
-# Assign to `config.pai.perforate_module_ids` to restrict dendrites to these
-# for parameter-efficient experiments per skill step 7.3.
-TOP_ONLY_MODULE_IDS: Tuple[str, ...] = (
-    ".features.11",
-    ".features.12",
-    ".features.13",
-    ".features.14",
-    ".features.15",
-    ".features.16",
-    ".classifier.2",
-    ".classifier.5",
-)
-
 
 @dataclass
 class Config:
