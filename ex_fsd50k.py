@@ -315,7 +315,7 @@ if __name__ == '__main__':
     parser.add_argument('--patience', type=int, default=10,
                         help="Early stopping patience: stop if validation mAP does "
                              "not improve for this many consecutive epochs.")
-    parser.add_argument('--min_delta', type=float, default=0.0,
+    parser.add_argument('--min_delta', type=float, default=1e-3,
                         help="Minimum mAP improvement to reset the early-stopping counter.")
     parser.add_argument('--mixup_alpha', type=float, default=0.3)
     parser.add_argument('--no_roll', action='store_true', default=False)
