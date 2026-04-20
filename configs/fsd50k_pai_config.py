@@ -1,30 +1,19 @@
 """
 Configuration for FSD50K fine-tuning with Perforated AI Dendrites.
 
-All hyperparameters are collected here so that `ex_fsd50k_perforatedai.py`
-doesn't need any argparse/CLI plumbing. Import `config` from this module
-and access it as attributes (e.g. `config.optim.lr`, `config.pai.max_dendrites`).
+Usage:
 
-Adjust sub-configs and call `make_fsd50k_config(...)`, or change the default
-`config` instance in-place after `make_fsd50k_config()`, then pass it to
-`train(config)`.
+    from configs.fsd50k_pai_config import config
+    train(config)                     # defaults
 
-See https://www.perforatedai.com/docs for PAI semantics.
+    # or customise a sub-config:
+    cfg = Config(model=ModelConfig(model_name="mn10_as"))
+    cfg.data.batch_size = 32
+    train(cfg)
 
-IMPORTANT PAI GOTCHAS THIS CONFIG HELPS AVOID
-----------------------------------------------
-* PAIConfig.__init__ auto-loads `{cwd}/{save_name}/{save_name}_config.json`
-  at import time, and every `set_*` call auto-saves back. If you re-use an
-  experiment name, stale JSON overrides Python defaults. The training
-  script below calls `GPA.pc.set_save_name(experiment_name)` before any
-  other config, which points auto-save at THIS run's folder.
-* `GPA.pc.append_modules_to_convert(...)` does NOT exist. The correct API
-  names are `append_modules_to_perforate` (class objects) and
-  `append_module_names_to_perforate` (string class names). Unknown
-  `set_*`/`append_*` calls are silently swallowed as no-ops by
-  PAIConfig.__getattr__.
-* `UPA.initialize_pai` is not the public entry point; use
-  `UPA.perforate_model` (skill + library).
+Derived fields (`experiment_name`, `wandb.name/group/notes`) are filled
+in by `Config.__post_init__` from `model.model_name` + `pai.switch_mode`
+unless you pass explicit values.
 """
 from dataclasses import dataclass, field
 from typing import List, Optional, Tuple
@@ -68,10 +57,14 @@ class ModelConfig:
 
 @dataclass
 class DataConfig:
+    # Augmentation
     roll: bool = True
     wavmix: bool = True
     gain_augment: int = 12
     variable_eval_length: bool = False  # True => val/eval batch_size forced to 1
+    # DataLoader
+    batch_size: int = 32
+    num_workers: int = 8
 
 
 @dataclass
@@ -91,8 +84,8 @@ class PAIConfig:
     """PAI knobs. See https://www.perforatedai.com/docs and perforatedai source."""
 
     # ------------------------------------------------------------------ master
-    perforated_bp: bool = True          # Perforated Backpropagation (beta)
-    testing_dendrite_capacity: bool = False   # keep True until 3 dendrites land
+    perforated_bp: bool = True
+    testing_dendrite_capacity: bool = True
     verbose: bool = False
 
     # ------------------------------------------------------- tensor dimensions
@@ -102,24 +95,45 @@ class PAIConfig:
     # ------------------------------------------------------------ module selection
     # Class names on `module_names_to_perforate`. "PAISequential", "Linear",
     # "Conv2d" etc. are already included in the library default; we append
-    # the MobileNet block classes by type in the training script using
+    # the MobileNet / DyMN block classes by type in the training script via
     # `append_modules_to_perforate`. Any class name added here is treated as
     # the short class name (e.g. "InvertedResidual").
     extra_module_names_to_perforate: Tuple[str, ...] = ()
 
     # Perforate the full backbone + classifier (default) or restrict to the
-    # "top" of the network for parameter efficiency. Block indices map to
-    # `model.features[<idx>]` on mn10_as (width_mult=1.0):
-    #   0          : Stem      Conv2dNormActivation (1 -> 8)
-    #   1..3       : Early     InvertedResidual      (8 -> 16 -> 24)
-    #   4..10      : Middle    InvertedResidual      (24 -> 40)
-    #   11..15     : Later     InvertedResidual      (40 -> 56 -> 80)
-    #   16         : Final     Conv2dNormActivation  (80 -> 480)
-    # Classifier linears sit at `.classifier.2` (480->640) and
-    # `.classifier.5` (640->200 logits).
+    # "top" of the network for parameter efficiency.
     #
-    # None  -> perforate every InvertedResidual + final Conv2dNormActivation
-    #          + classifier Linears (skill default: block-level conversion).
+    # MobileNet (mn10_as, width_mult=1.0):
+    #   model.features[0]     Conv2dNormActivation (stem, 1 -> 8)   [tracked]
+    #   model.features[1..3]  InvertedResidual     (8 -> 16 -> 24)  [perforated]
+    #   model.features[4..10] InvertedResidual     (24 -> 40)       [perforated]
+    #   model.features[11..15] InvertedResidual    (40 -> 56 -> 80) [perforated]
+    #   model.features[16]    Conv2dNormActivation (80 -> 480)      [perforated]
+    #   model.classifier.2    Linear               (480 -> 640)     [perforated]
+    #   model.classifier.5    Linear               (640 -> 200)     [perforated]
+    #
+    # DyMN (dymn04_as):
+    #   model.in_c            Conv2dNormActivation (stem)           [tracked via track_module_ids]
+    #   model.layers[0..14]   DY_Block             (body)           [perforated w/ DYBlockProcessor]
+    #   model.out_c           Conv2dNormActivation (head)           [tracked -- see below]
+    #   model.classifier.2    Linear               (384 -> 512)     [perforated]
+    #   model.classifier.5    Linear               (512 -> 200)     [perforated]
+    #
+    # DY_Block is a multi-input module (`forward(x, g=None)`, where `g` is
+    # the upstream global-context vector). Without intervention PAI's default
+    # dendrite clone receives only `x` and `g` defaults to None -- every
+    # DynamicConv inside the clone then produces near-constant kernels and
+    # PBScore sits at ~0 (exactly what the first DyMN run's PBScore plot
+    # showed for all 15 blocks). The training script fixes this by
+    # registering a ``DYBlockProcessor`` via ``modules_with_processing``
+    # (customization.md section 2.2) so the dendrite sees the same
+    # ``(x, g)`` pair as the neuron.
+    #
+    # ``out_c`` remains track-only: empirically its PBScore was ~0 even with
+    # full wrapping (wide 64->384 projection right before global pooling --
+    # no residual error left to model once the pretrained main branch runs).
+    #
+    # None  -> default module-class perforation (DY_Block + Linear).
     # List  -> restrict dendrites to these dotted module ids only.
     perforate_module_ids: Optional[List[str]] = None
 
@@ -165,12 +179,22 @@ class PAIConfig:
     running_average_pb: bool = False
 
     # ----------------------- mode-P "last improved" thresholds (per-node) ---
-    pai_improvement_threshold: float = 0.1
+    pai_improvement_threshold: float = 0.5
     pai_improvement_threshold_raw: float = 0.01
 
     # --------------------------------- validation improvement thresholds ----
-    improvement_threshold: float = 0.0
-    improvement_threshold_raw: float = 0.0
+    # PAI getter returns element `[min(len-1, num_dendrites_added)]`, so the
+    # list encodes per-stage plateau tolerance: strict (0.1 % rel) at arch 0,
+    # relaxed (0.01 %) once the first dendrite set lands, 0 once fully grown.
+    # Values of 0.0 (the earlier default here) disabled plateau detection
+    # entirely -- the first arch-switch only fired via raw epoch timeout at
+    # epoch ~80 instead of ~30, wasting compute on a plateaued model.
+    improvement_threshold: Tuple[float, ...] = (0.001, 0.0001, 0.0)
+    # mAP is reported on the 0-100 scale (see `add_validation_score(mAP*100,..)`),
+    # so PAI's raw-diff default of 1e-5 is far below validation noise. 1e-3
+    # = 0.001 mAP points requires a genuine improvement before resetting
+    # the plateau counter.
+    improvement_threshold_raw: float = 1e-3
 
     # --------------------------------- candidate dendrite init + stability --
     candidate_weight_initialization_multiplier: float = 0.005
@@ -212,58 +236,31 @@ TOP_ONLY_MODULE_IDS: Tuple[str, ...] = (
 
 @dataclass
 class Config:
-    preprocess: PreprocessConfig
-    model: ModelConfig
-    data: DataConfig
-    optim: OptimConfig
-    pai: PAIConfig
-    experiment_name: str
-    wandb: WandbConfig
+    preprocess: PreprocessConfig = field(default_factory=PreprocessConfig)
+    model: ModelConfig = field(default_factory=ModelConfig)
+    data: DataConfig = field(default_factory=DataConfig)
+    optim: OptimConfig = field(default_factory=OptimConfig)
+    pai: PAIConfig = field(default_factory=PAIConfig)
+    wandb: WandbConfig = field(default_factory=WandbConfig)
+    experiment_name: str = ""
     cuda: bool = True
-    batch_size: int = 64
-    num_workers: int = 12
+
+    def __post_init__(self) -> None:
+        # Derive run slug + wandb metadata from model + pai unless caller
+        # supplied explicit overrides. This keeps `Config()` zero-arg usable
+        # while still letting power users pin any field.
+        slug = self.experiment_name or f"FSD50K-{self.model.model_name}-pai-{self.pai.switch_mode}"
+        self.experiment_name = slug
+        if not self.wandb.name:
+            self.wandb.name = slug
+        if not self.wandb.group:
+            self.wandb.group = slug
+        if not self.wandb.notes:
+            self.wandb.notes = (
+                f"Fine-tune {self.model.model_name} on FSD50K with Perforated AI Dendrites."
+            )
 
 
-def _fsd50k_run_slug(model: ModelConfig, pai: PAIConfig) -> str:
-    return f"FSD50K-{model.model_name}-pai-{pai.switch_mode}"
-
-
-def make_fsd50k_config(
-    *,
-    preprocess: Optional[PreprocessConfig] = None,
-    model: Optional[ModelConfig] = None,
-    data: Optional[DataConfig] = None,
-    optim: Optional[OptimConfig] = None,
-    pai: Optional[PAIConfig] = None,
-    cuda: bool = True,
-    batch_size: int = 64,
-    num_workers: int = 12,
-) -> Config:
-    """Build `Config` with `experiment_name` and `wandb.{name,group}` set to `FSD50K-{m}-pai-{s}`."""
-    preprocess = preprocess or PreprocessConfig()
-    model = model or ModelConfig()
-    data = data or DataConfig()
-    optim = optim or OptimConfig()
-    pai = pai or PAIConfig()
-    g = _fsd50k_run_slug(model, pai)
-    return Config(
-        preprocess=preprocess,
-        model=model,
-        data=data,
-        optim=optim,
-        pai=pai,
-        experiment_name=g,
-        wandb=WandbConfig(
-            name=g,
-            group=g,
-            notes=f"Fine-tune {model.model_name} on FSD50K with Perforated AI Dendrites.",
-        ),
-        cuda=cuda,
-        batch_size=batch_size,
-        num_workers=num_workers,
-    )
-
-
-# Default instance consumed by the training script. Prefer editing kwargs in
-# `make_fsd50k_config(...)` or mutating this object after creation.
-config = make_fsd50k_config()
+# Default instance consumed by the training script. Construct a fresh
+# `Config(...)` or mutate this object in-place to customise a run.
+config = Config()

@@ -4,30 +4,29 @@ FSD50K fine-tuning with Perforated AI Dendrites.
 Usage:
     python ex_fsd50k_perforatedai.py
 
-Architecture target (mn10_as, width_mult=1.0):
-  Input  (1 channel mel spectrogram)
-    |
-  features[0]            Conv2dNormActivation (stem, 1->8)       [tracked only]
-    |
-  features[1..3]         InvertedResidual  (early: 8 -> 16 -> 24) [perforated]
-  features[4..6]         InvertedResidual  (early: 24 -> 24)      [perforated]
-  features[7..10]        InvertedResidual  (middle: 24 -> 40)     [perforated]
-  features[11..12]       InvertedResidual  (later: 40 -> 56)      [perforated]
-  features[13..15]       InvertedResidual  (later: 56 -> 80)      [perforated]
-  features[16]           Conv2dNormActivation (final 1x1, 80->480)[perforated]
-    |
-  classifier.0..1        AvgPool2d + Flatten                      [no params]
-  classifier.2 (Linear)  480 -> 640                               [perforated]
-  classifier.3..4        Hardswish + Dropout                      [no params]
-  classifier.5 (Linear)  640 -> 200 (logits)                      [perforated]
+PERFORATION STRATEGY (per backbone)
+-----------------------------------
+MobileNet (`mn*_as`): each `InvertedResidual` block + the final
+`Conv2dNormActivation` (80->480) are wrapped as `PAINeuronModule` units,
+along with both classifier `Linear`s (skill step 7.2, block-level wrap).
+The stem conv is excluded via `track_module_ids`.
 
-Dendrite conversion happens at the InvertedResidual-block level (skill
-step 7.2): the 1x1 expand, depthwise conv, SE attention, and 1x1 project
-inside each block are wrapped together rather than individually. For a
-parameter-efficient run restricted to the "Later blocks + Final conv +
-Classifier" region, set `config.pai.perforate_module_ids = list(
-TOP_ONLY_MODULE_IDS)` in the config module (covers features[11..16] and
-both classifier Linears).
+DyMN (`dymn*_as`): all 15 `DY_Block`s + the two classifier `Linear`s are
+perforated. `DY_Block.forward(x, g=None)` is a multi-input module (feature
+map + upstream global context), so PAI's default single-tensor dendrite
+machinery silently drops `g`. We fix this with `DYBlockProcessor`
+registered via `modules_with_processing` (customization.md section 2.2) so
+the dendrite clone receives the same `(x, g)` pair as the neuron.
+
+`Conv2dNormActivation` is still track-only on DyMN: empirically the `out_c`
+head sat at PBScore ~0 for the entire prior run (wide 64->384 projection
+near the pooled output -- no residual error left to model), and the
+`in_c` stem is excluded by the skill's "no dendrites on low-level
+features" guidance anyway. The walker stops at both as atomic units.
+
+To override per-experiment, set `config.pai.perforate_module_ids` in the
+config module. `TOP_ONLY_MODULE_IDS` is a convenience preset for
+parameter-efficient MN runs (features[11..16] + both classifier Linears).
 
 PAI reference: https://www.perforatedai.com/docs
 """
@@ -38,7 +37,6 @@ from configs.fsd50k_pai_config import (
     PAI_EMAIL,
     PAI_TOKEN,
     config as default_config,
-    make_fsd50k_config,
 )
 
 # ============================================================================
@@ -59,13 +57,7 @@ from datasets.fsd50k import get_valid_set, get_training_set
 from models.mn.model import get_model as get_mobilenet  
 from models.mn.block_types import InvertedResidual  
 from models.dymn.model import get_model as get_dymn  
-from models.dymn.dy_block import (  
-    DY_Block,
-    ContextGen,
-    CoordAtt,
-    DyReLUB,
-    DynamicWrapper,
-)
+from models.dymn.dy_block import DY_Block  
 from models.preprocess import AugmentMelSTFT  
 from helpers.init import worker_init_fn  
 from helpers.utils import NAME_TO_WIDTH, mixup  
@@ -105,39 +97,94 @@ _install_pai_name_aliases()
 
 
 # ----------------------------------------------------------------------------
+# DY_Block dendrite processor (customization.md section 2.2)
+# ----------------------------------------------------------------------------
+# NOTE: processor classes MUST live at module scope (not nested inside another
+# class/function). PAI copies them into its internal registry by reference and
+# instantiates one per wrapped module at `perforate_model` time; bound methods
+# on a local class would capture `self` of the enclosing scope and break.
+class DYBlockProcessor:
+    """Dendrite processor for ``DY_Block`` (multi-input, single-tensor output).
+
+    ``DY_Block.forward(self, x, g=None) -> Tensor``
+      * ``x`` is the feature map (B, C, H, W).
+      * ``g`` is the upstream global-context vector produced by the
+        preceding ``DY_Block.context_gen`` (``None`` on block 0).
+      * Output is a single tensor after projection + internal residual.
+
+    Without a processor, PAI's default dendrite clone only receives ``x`` and
+    calls ``DY_Block(x)`` -- i.e. ``g`` defaults to ``None`` inside the clone,
+    ``context_gen(x, None)`` runs on the degenerate path, every
+    ``DynamicConv`` produces near-constant kernels and the PBScore sits at
+    ~0. That's exactly what the first DyMN run's "Best PBScores" plot showed
+    for all 15 blocks.
+
+    Since the module is single-tensor-out, three of the four hooks are pure
+    pass-throughs; only ``pre_d`` has non-trivial work (forwarding *all*
+    args + kwargs to the dendrite so it gets the same ``g`` as the neuron).
+    """
+
+    def pre_d(self, *args, **kwargs):
+        # Dendrite input must match the main module's signature -- PAI will
+        # splat the returned (args, kwargs) into `dendrite_module(*args, **kwargs)`.
+        return args, kwargs
+
+    def post_d(self, dendrite_out, *args, **kwargs):
+        # Single-tensor output -- nothing to extract.
+        return dendrite_out
+
+    def post_n1(self, neuron_out, *args, **kwargs):
+        # Single-tensor output -- nothing to split off / save.
+        return neuron_out
+
+    def post_n2(self, combined_out, *args, **kwargs):
+        # No side state was saved in post_n1, so no re-tupling needed.
+        return combined_out
+
+    def clear_processor(self):
+        # Called whenever PAI saves/copies the network; we hold no state.
+        pass
+
+
+# ----------------------------------------------------------------------------
 # Per-model block registration
 # ----------------------------------------------------------------------------
 def _select_pai_blocks_for_model(model_name: str):
-    """Return ``(perforate_classes, perforate_names, track_names)`` for this backbone.
+    """Return ``(perforate_classes, perforate_names, track_classes, track_names)``.
 
-    * ``perforate_classes`` / ``perforate_names``: block classes wrapped as
-      ``PAINeuronModule`` (get dendrites). Registered both by class object
-      AND by short class name for robustness against duplicate imports.
-    * ``track_names``: side-branch class names wrapped as ``TrackedNeuronModule``
-      (no dendrites, but gradients flow and PAI stops flagging their inner
-      norm layers as "unwrapped").
+    ``perforate_*``: classes wrapped as ``PAINeuronModule`` (get dendrites).
+    ``track_*``:     classes wrapped as ``TrackedNeuronModule`` (no dendrites,
+                     walker stops here so interior layers are untouched).
+    Both are registered by class object AND by short class name to be robust
+    against duplicate imports (identity check misses, name check hits).
 
-    MN (MobileNet): blocks are `InvertedResidual`; stem/head are
-    `Conv2dNormActivation`. Nothing to track beyond the stem id.
+    MobileNet (`mn*`): `InvertedResidual` blocks and the head
+    `Conv2dNormActivation` are the canonical perforation targets -- they all
+    have clean `forward(x) -> y` semantics so PAI's default dendrite machinery
+    works out of the box. The stem is excluded via ``track_module_ids``.
 
-    DyMN (Dynamic MobileNet): blocks are `DY_Block`; stem/head are
-    `Conv2dNormActivation`. The inner side-branch modules
-    (`ContextGen`, `CoordAtt`, `DyReLUB`, `DynamicWrapper`) are wrapped INSIDE
-    `DY_Block` so they don't normally need explicit tracking -- but we add
-    them as track-only anyway so that any future partial-perforation
-    configuration (e.g. ``perforate_module_ids`` excluding some `DY_Block`s)
-    still doesn't trip the "unwrapped norm" warning on their internals.
+    DyMN (`dymn*`): `DY_Block` is perforated as a single unit via the
+    ``DYBlockProcessor`` above -- the processor routes the multi-tensor
+    ``(x, g)`` inputs through the dendrite clone so its internal
+    ``DynamicConv / DyReLUB / CoordAtt`` see the real upstream global context
+    instead of a degenerate ``g=None``. ``Conv2dNormActivation`` stays
+    track-only: prior-run PBScore on ``out_c`` (64->384 head) was ~0 (wide
+    projection near the pooled output -- no residual error left to model),
+    and the stem ``in_c`` is excluded by the skill's "no dendrites on
+    low-level features" guidance via ``track_module_ids``.
     """
     family = model_name.lower()
     if family.startswith("dymn"):
-        perforate_classes = [DY_Block, Conv2dNormActivation]
-        perforate_names = ["DY_Block", "Conv2dNormActivation"]
-        track_names = ["ContextGen", "CoordAtt", "DyReLUB", "DynamicWrapper"]
+        perforate_classes = [DY_Block]
+        perforate_names = ["DY_Block"]
+        track_classes = [Conv2dNormActivation]
+        track_names = ["Conv2dNormActivation"]
     else:
         perforate_classes = [InvertedResidual, Conv2dNormActivation]
         perforate_names = ["InvertedResidual", "Conv2dNormActivation"]
+        track_classes = []
         track_names = []
-    return perforate_classes, perforate_names, track_names
+    return perforate_classes, perforate_names, track_classes, track_names
 
 
 # ----------------------------------------------------------------------------
@@ -182,11 +229,13 @@ def _configure_pai(cfg: Config, save_name: str) -> None:
     # We register by class object AND by class-name string: the class-identity
     # check in PAI can miss when the same class is imported via two paths
     # (e.g. torchvision re-exports), but the short-name string match still hits.
-    perforate_classes, perforate_names, track_names = _select_pai_blocks_for_model(
-        cfg.model.model_name
+    perforate_classes, perforate_names, track_classes, track_names = (
+        _select_pai_blocks_for_model(cfg.model.model_name)
     )
-    GPA.pc.append_modules_to_perforate(perforate_classes)
-    GPA.pc.append_module_names_to_perforate(perforate_names)
+    if perforate_classes:
+        GPA.pc.append_modules_to_perforate(perforate_classes)
+    if perforate_names:
+        GPA.pc.append_module_names_to_perforate(perforate_names)
 
     # Optional extras by class name
     if pai.extra_module_names_to_perforate:
@@ -202,14 +251,27 @@ def _configure_pai(cfg: Config, save_name: str) -> None:
     if pai.track_module_ids:
         GPA.pc.append_module_ids_to_track(list(pai.track_module_ids))
 
-    # Track-only class names: PAI will wrap these as `TrackedNeuronModule`
-    # (no dendrites, but children no longer flagged as "unwrapped norm").
-    # Use this for side-branch modules with internal BatchNorm layers that
-    # PAI cannot safely dendrite -- DyMN's `ContextGen` is the archetype.
-    # The model-family defaults come from `_select_pai_blocks_for_model`.
+    # Track-only classes: PAI wraps these as `TrackedNeuronModule` (no
+    # dendrites added, and the walker STOPS at them so the inner layers are
+    # never flagged as "unwrapped norm"). We register both by class object
+    # and short name for robustness against duplicate imports.
+    if track_classes:
+        GPA.pc.append_modules_to_track(track_classes)
     all_track_names = list(track_names) + list(pai.track_module_names)
     if all_track_names:
         GPA.pc.append_module_names_to_track(all_track_names)
+
+    # Per-class processors for modules whose forward takes >1 tensor or
+    # returns >1 tensor (customization.md section 2.2). DY_Block is the only
+    # such module in this codebase; MobileNet's InvertedResidual has a clean
+    # `forward(x) -> y` signature and uses PAI's default machinery.
+    # IMPORTANT: the two processor arrays are paired by position -- for every
+    # entry in `module_names_with_processing` there must be a matching entry
+    # in `module_by_name_processing_classes`. If you ever add a MobileNet
+    # processor, append in BOTH lists in lockstep.
+    if cfg.model.model_name.lower().startswith("dymn"):
+        GPA.pc.append_module_names_with_processing(["DY_Block"])
+        GPA.pc.append_module_by_name_processing_classes([DYBlockProcessor])
 
     # Silence the "unwrapped modules" pdb break once the user has audited
     # their registration and confirmed all unwrapped params are intentional.
@@ -234,9 +296,12 @@ def _configure_pai(cfg: Config, save_name: str) -> None:
     GPA.pc.set_running_average_pb(pai.running_average_pb)
 
     # --- Improvement thresholds --------------------------------------------
+    # `improvement_threshold` must be a `list` (not tuple): PAIConfig's
+    # getter checks `type(...) is list` exactly, and a tuple silently
+    # defeats the per-dendrite-count indexing.
     GPA.pc.set_pai_improvement_threshold(pai.pai_improvement_threshold)
     GPA.pc.set_pai_improvement_threshold_raw(pai.pai_improvement_threshold_raw)
-    GPA.pc.set_improvement_threshold(pai.improvement_threshold)
+    GPA.pc.set_improvement_threshold(list(pai.improvement_threshold))
     GPA.pc.set_improvement_threshold_raw(pai.improvement_threshold_raw)
 
     # --- Candidate dendrite init + stability -------------------------------
@@ -256,7 +321,7 @@ def _reapply_validation_thresholds(cfg: Config) -> None:
     """
     pai = cfg.pai
     GPA.pc.set_running_average_pb(pai.running_average_pb)
-    GPA.pc.set_improvement_threshold(pai.improvement_threshold)
+    GPA.pc.set_improvement_threshold(list(pai.improvement_threshold))
     GPA.pc.set_improvement_threshold_raw(pai.improvement_threshold_raw)
     GPA.pc.set_pai_improvement_threshold(pai.pai_improvement_threshold)
     GPA.pc.set_pai_improvement_threshold_raw(pai.pai_improvement_threshold_raw)
@@ -381,12 +446,12 @@ def train(cfg: Config = default_config):
             gain_augment=dc.gain_augment,
         ),
         worker_init_fn=worker_init_fn,
-        num_workers=cfg.num_workers,
-        batch_size=cfg.batch_size,
+        num_workers=dc.num_workers,
+        batch_size=dc.batch_size,
         shuffle=True,
         pin_memory=True,
-        persistent_workers=cfg.num_workers > 0,
-        prefetch_factor=cfg.num_workers // 2 if cfg.num_workers > 0 else None,
+        persistent_workers=dc.num_workers > 0,
+        prefetch_factor=dc.num_workers // 2 if dc.num_workers > 0 else None,
     )
 
     valid_dl = DataLoader(
@@ -395,11 +460,11 @@ def train(cfg: Config = default_config):
             variable_eval=dc.variable_eval_length,
         ),
         worker_init_fn=worker_init_fn,
-        num_workers=cfg.num_workers,
-        batch_size=1 if dc.variable_eval_length else cfg.batch_size,
+        num_workers=dc.num_workers,
+        batch_size=1 if dc.variable_eval_length else dc.batch_size,
         pin_memory=True,
-        persistent_workers=cfg.num_workers > 0,
-        prefetch_factor=cfg.num_workers // 2 if cfg.num_workers > 0 else None,
+        persistent_workers=dc.num_workers > 0,
+        prefetch_factor=dc.num_workers // 2 if dc.num_workers > 0 else None,
     )
 
     # ---------------- PAI-managed optimizer + scheduler --------------------
