@@ -104,6 +104,7 @@ def train(args):
         mel.train()
         model.train()
         train_stats = dict(train_loss=list())
+        train_targets, train_outputs = [], []
         pbar = tqdm(dl)
         pbar.set_description("Epoch {} (best mAP: {:.4f} @ ep {}, no-improve: {}/{})"
                              .format(epoch + 1, best_mAP if best_mAP > float('-inf') else 0.0,
@@ -132,12 +133,23 @@ def train(args):
             # append training statistics
             train_stats['train_loss'].append(loss.detach().cpu().numpy())
 
+            # Accumulate predictions vs. ORIGINAL (pre-mixup) targets for
+            # an on-the-fly training mAP/ROC. Predictions reflect the
+            # current (still-updating) model; treat this as a noisy
+            # upper-bound proxy for "did the model memorize / fit the
+            # training distribution?".
+            train_targets.append(y.detach().cpu().numpy())
+            train_outputs.append(y_hat.detach().float().cpu().numpy())
+
             # Update Model
             loss.backward()
             optimizer.step()
             optimizer.zero_grad()
         # Update learning rate
         scheduler.step()
+
+        # compute training-set mAP/ROC from the accumulated batches
+        train_mAP, train_ROC = _score(train_targets, train_outputs)
 
         # evaluate
         mAP, ROC, val_loss = _test(model, mel, valid_dl, device)
@@ -153,6 +165,8 @@ def train(args):
 
         # log train and validation statistics
         wandb.log({"train_loss": np.mean(train_stats['train_loss']),
+                   "train_mAP": train_mAP,
+                   "train_ROC": train_ROC,
                    "learning_rate": scheduler.get_last_lr()[0],
                    "mAP": mAP,
                    "ROC": ROC,
@@ -197,13 +211,34 @@ def _mel_forward(x, mel):
     return x
 
 
+def _score(targets_list, outputs_list):
+    """Macro mAP and ROC-AUC from accumulated per-batch target / logit arrays.
+
+    Shared by training and validation. Two boundary fixes:
+
+    1. Binarize targets with `>= 0.5`. When `wavmix=True` (default), the
+       training set is wrapped in `MixupDataset`, which returns
+       DATASET-LEVEL blended targets like `y1 * l + y2 * (1 - l)` with
+       `l in [0.5, 1]` -- i.e. continuous floats. sklearn's
+       `average_precision_score` rejects those as
+       "continuous-multioutput". Thresholding at 0.5 recovers the
+       dominant sample's label vector, the natural binary ground truth.
+       No-op on validation's already-binary `{0.0, 1.0}` targets.
+    2. `nan_to_num` on outputs guards against any non-finite logits from
+       numerical instability early in training.
+    """
+    targets = (np.concatenate(targets_list) >= 0.5).astype(np.int8)
+    outputs = np.nan_to_num(np.concatenate(outputs_list))
+    mAP = metrics.average_precision_score(targets, outputs, average=None).mean()
+    ROC = metrics.roc_auc_score(targets, outputs, average=None).mean()
+    return float(mAP), float(ROC)
+
+
 def _test(model, mel, eval_loader, device):
     model.eval()
     mel.eval()
 
-    targets = []
-    outputs = []
-    losses = []
+    targets, outputs, losses = [], [], []
     pbar = tqdm(eval_loader)
     pbar.set_description("Validating")
     for batch in pbar:
@@ -217,12 +252,8 @@ def _test(model, mel, eval_loader, device):
         outputs.append(y_hat.float().cpu().numpy())
         losses.append(F.binary_cross_entropy_with_logits(y_hat, y).cpu().numpy())
 
-    targets = np.concatenate(targets)
-    outputs = np.concatenate(outputs)
-    losses = np.stack(losses)
-    mAP = metrics.average_precision_score(targets, outputs, average=None)
-    ROC = metrics.roc_auc_score(targets, outputs, average=None)
-    return mAP.mean(), ROC.mean(), losses.mean()
+    mAP, ROC = _score(targets, outputs)
+    return mAP, ROC, float(np.stack(losses).mean())
 
 
 def evaluate(args):

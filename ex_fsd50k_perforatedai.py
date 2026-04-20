@@ -429,6 +429,12 @@ def train(cfg: Config = default_config):
     _reapply_validation_thresholds(cfg)
     _report_dendrite_targets(model)
 
+    # Full post-perforation module tree: lets the user visually confirm
+    # which blocks became `PAINeuronModule` / `TrackedNeuronModule` and
+    # which stayed as plain `nn.Module`s.
+    print("[PAI] Model structure after perforation:")
+    print(model)
+
     model.to(device)
 
     total_params = sum(p.numel() for p in model.parameters())
@@ -451,7 +457,7 @@ def train(cfg: Config = default_config):
         shuffle=True,
         pin_memory=True,
         persistent_workers=dc.num_workers > 0,
-        prefetch_factor=dc.num_workers // 2 if dc.num_workers > 0 else None,
+        prefetch_factor=dc.prefetch_factor,
     )
 
     valid_dl = DataLoader(
@@ -464,7 +470,7 @@ def train(cfg: Config = default_config):
         batch_size=1 if dc.variable_eval_length else dc.batch_size,
         pin_memory=True,
         persistent_workers=dc.num_workers > 0,
-        prefetch_factor=dc.num_workers // 2 if dc.num_workers > 0 else None,
+        prefetch_factor=dc.prefetch_factor,
     )
 
     # ---------------- PAI-managed optimizer + scheduler --------------------
@@ -479,6 +485,7 @@ def train(cfg: Config = default_config):
     name = None
     mAP, ROC, val_loss = float('NaN'), float('NaN'), float('NaN')
     train_loss_epoch = float('NaN')
+    train_mAP, train_ROC = float('NaN'), float('NaN')
     best_val_mAP, best_val_epoch = float("-inf"), -1
 
     epoch = -1
@@ -487,11 +494,12 @@ def train(cfg: Config = default_config):
         mel.train()
         model.train()
         train_loss_list = []
+        train_targets, train_outputs = [], []
 
         pbar = tqdm(dl)
         pbar.set_description(
             f"Epoch {epoch + 1} | mAP={mAP:.4f} val_loss={val_loss:.4f} "
-            f"train_loss={train_loss_epoch:.4f}"
+            f"train_loss={train_loss_epoch:.4f} train_mAP={train_mAP:.4f}"
         )
 
         for batch in pbar:
@@ -525,6 +533,14 @@ def train(cfg: Config = default_config):
                 loss = samples_loss.mean()
 
             train_loss_list.append(loss.detach().cpu().numpy())
+            # Accumulate predictions vs. ORIGINAL (pre-mixup) targets so we
+            # can compute an epoch-level training mAP/ROC without an extra
+            # forward pass. This is a noisy running estimate (model weights
+            # are updating through the epoch, and under mixup the logits
+            # correspond to mixed inputs), but it tracks train-set fit and
+            # makes the train/val generalization gap visible in wandb.
+            train_targets.append(y.detach().cpu().numpy())
+            train_outputs.append(y_hat.detach().float().cpu().numpy())
 
             if amp_enabled:
                 scaler.scale(loss).backward()
@@ -535,9 +551,16 @@ def train(cfg: Config = default_config):
                 optimizer.step()
 
         train_loss_epoch = float(np.mean(train_loss_list)) if train_loss_list else float('NaN')
+        train_mAP, train_ROC = _score(train_targets, train_outputs)
 
-        # Train-loss trace for PAI graphs. Negated so "higher = better" still
-        # holds on the extra-score axis (PAI treats these as informational).
+        # Canonical PAI extra-score registration (SKILL.md 7.1). The label
+        # "train" is what `perforatedai-analyze` keys off for overfitting /
+        # train-val-gap diagnostics, so don't rename it. Value is on the
+        # 0-100 scale to match `add_validation_score(mAP * 100, ...)` below
+        # so both traces share the y-axis on PAI's auto-generated graphs.
+        GPA.pai_tracker.add_extra_score(train_mAP * 100.0, "train")
+        # Auxiliary trace: negated train loss so "higher = better" still
+        # holds on the extra-score axis (PAI treats extras as informational).
         GPA.pai_tracker.add_extra_score(-train_loss_epoch, "NegTrainLoss")
         model.to(device)
 
@@ -555,6 +578,8 @@ def train(cfg: Config = default_config):
 
         wandb.log({
             "train_loss": train_loss_epoch,
+            "train_mAP": train_mAP,
+            "train_ROC": train_ROC,
             "mAP": mAP,
             "ROC": ROC,
             "val_loss": val_loss,
@@ -600,6 +625,33 @@ def _mel_forward(x, mel):
     return x
 
 
+def _score(targets_list, outputs_list):
+    """Macro mAP and ROC-AUC from accumulated per-batch target / logit arrays.
+
+    Shared by training and validation. Two boundary fixes:
+
+    1. Binarize targets with `>= 0.5`. When `wavmix=True`, the training
+       set is wrapped in `MixupDataset`, which returns DATASET-LEVEL
+       blended targets like `y1 * l + y2 * (1 - l)` with `l in [0.5, 1]`
+       -- i.e. continuous floats (0.73, 0.27, ...). sklearn's
+       `average_precision_score` rejects those with
+       "continuous-multioutput format is not supported". Thresholding at
+       0.5 recovers the DOMINANT sample's label vector, which is the
+       natural binary ground truth to score against. This is a no-op on
+       validation's already-binary `{0.0, 1.0}` targets.
+    2. `nan_to_num` on outputs. Under AMP, freshly-initialized dendrite
+       candidates occasionally push fp16 logits to inf/nan on the first
+       batches; `GradScaler` rejects those optimizer steps but the
+       logits were already captured. Scrub to finite sentinels so
+       sklearn's internal sort stays stable.
+    """
+    targets = (np.concatenate(targets_list) >= 0.5).astype(np.int8)
+    outputs = np.nan_to_num(np.concatenate(outputs_list))
+    mAP = metrics.average_precision_score(targets, outputs, average=None).mean()
+    ROC = metrics.roc_auc_score(targets, outputs, average=None).mean()
+    return float(mAP), float(ROC)
+
+
 def _test(model, mel, eval_loader, device):
     model.eval()
     mel.eval()
@@ -618,12 +670,8 @@ def _test(model, mel, eval_loader, device):
         outputs.append(y_hat.float().cpu().numpy())
         losses.append(F.binary_cross_entropy_with_logits(y_hat, y).cpu().numpy())
 
-    targets = np.concatenate(targets)
-    outputs = np.concatenate(outputs)
-    losses = np.stack(losses)
-    mAP = metrics.average_precision_score(targets, outputs, average=None)
-    ROC = metrics.roc_auc_score(targets, outputs, average=None)
-    return float(mAP.mean()), float(ROC.mean()), float(losses.mean()), int(targets.shape[0])
+    mAP, ROC = _score(targets, outputs)
+    return mAP, ROC, float(np.stack(losses).mean()), int(np.concatenate(targets).shape[0])
 
 
 def _config_as_dict(cfg: Config) -> dict:

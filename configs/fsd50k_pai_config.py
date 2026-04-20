@@ -65,6 +65,7 @@ class DataConfig:
     # DataLoader
     batch_size: int = 64
     num_workers: int = 8
+    prefetch_factor: int = None
 
 
 @dataclass
@@ -189,12 +190,9 @@ class PAIConfig:
     # Values of 0.0 (the earlier default here) disabled plateau detection
     # entirely -- the first arch-switch only fired via raw epoch timeout at
     # epoch ~80 instead of ~30, wasting compute on a plateaued model.
-    improvement_threshold: Tuple[float, ...] = (0.001, 0.0001, 0.0)
+    improvement_threshold: Tuple[float, ...] = (0.01, 0.001, 0.0)
     # mAP is reported on the 0-100 scale (see `add_validation_score(mAP*100,..)`),
-    # so PAI's raw-diff default of 1e-5 is far below validation noise. 1e-3
-    # = 0.001 mAP points requires a genuine improvement before resetting
-    # the plateau counter.
-    improvement_threshold_raw: float = 1e-3
+    improvement_threshold_raw: float = 1e-2
 
     # --------------------------------- candidate dendrite init + stability --
     candidate_weight_initialization_multiplier: float = 0.005
