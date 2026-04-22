@@ -94,55 +94,81 @@ class PAIConfig:
     output_dimensions: Tuple[int, int, int, int] = (-1, 0, -1, -1)
 
     # ------------------------------------------------------------ module selection
-    # Class names on `module_names_to_perforate`. "PAISequential", "Linear",
-    # "Conv2d" etc. are already included in the library default; we append
-    # the MobileNet / DyMN block classes by type in the training script via
-    # `append_modules_to_perforate`. Any class name added here is treated as
-    # the short class name (e.g. "InvertedResidual").
+    # Extra class names appended to `module_names_to_perforate` IN ADDITION
+    # to whatever the per-model branch in `_select_pai_blocks_for_model`
+    # picks. PAI's library default for CNNs is ["Conv2d", "Linear",
+    # "PAISequential", ...]; the training script may override that wholesale
+    # via `perforate_names_override` below, in which case this extras list
+    # is appended AFTER the override.
     extra_module_names_to_perforate: Tuple[str, ...] = ()
 
-    # Perforate the full backbone + classifier (default) or restrict to the
-    # "top" of the network for parameter efficiency.
+    # REPLACE PAI's default class-name perforate list with exactly this list
+    # (instead of appending). Use sparingly -- the main use-case is to strip
+    # "Conv2d" out of the default so the walker passes through Conv2d leaves
+    # without wrapping them.
     #
-    # MobileNet (mn10_as, width_mult=1.0):
-    #   model.features[0]     Conv2dNormActivation (stem, 1 -> 8)   [tracked]
-    #   model.features[1..3]  InvertedResidual     (8 -> 16 -> 24)  [perforated]
-    #   model.features[4..10] InvertedResidual     (24 -> 40)       [perforated]
-    #   model.features[11..15] InvertedResidual    (40 -> 56 -> 80) [perforated]
-    #   model.features[16]    Conv2dNormActivation (80 -> 480)      [perforated]
-    #   model.classifier.2    Linear               (480 -> 640)     [perforated]
-    #   model.classifier.5    Linear               (640 -> 200)     [perforated]
+    # MobileNet strategy (probe-validated; see probes/mn04_as_plateau.csv):
+    #   set_module_names_to_perforate(["Linear"]) so PAI descends into every
+    #   InvertedResidual / Conv2dNormActivation WITHOUT wrapping them, and
+    #   wraps only the Linears it finds on the way down. Given MN's module
+    #   layout, those Linears are exactly:
+    #     * features[N].block[2].conc_se_layers[i].fc1   (SE squeeze)
+    #     * features[N].block[2].conc_se_layers[i].fc2   (SE excite)
+    #     * classifier.2                                 (640 -> 512)
+    #     * classifier.5                                 (512 -> 200)
+    #   Gradient probe showed these 15 SE Linears + 2 classifier Linears
+    #   carry >=26x the gradient magnitude of any IR/C2NA wrapper.
+    #
+    # DyMN uses the default list (None here) + append of DY_Block in the
+    # training script, so block-level perforation keeps working there.
+    #
+    # None  -> keep PAI's library default.
+    # Tuple -> overwrite with these class names only.
+    perforate_names_override: Optional[Tuple[str, ...]] = None
+
+    # Full-model layout reference (MobileNet mn04_as, width_mult=0.4):
+    #
+    #   features[0]            Conv2dNormActivation   (stem, 1 -> 8)   [walker descends -- no Linear inside]
+    #   features[1..15]        InvertedResidual                        [walker descends into .block[2] SE]
+    #     .block[0]            Conv2dNormActivation   (1x1 expand)     [skipped -- Conv2d only]
+    #     .block[1]            Conv2dNormActivation   (dw conv)        [skipped -- Conv2d only]
+    #     .block[2]            ConcurrentSEBlock                       [walker descends]
+    #       .conc_se_layers[i] SqueezeExcitation
+    #         .fc1             Linear                                  [PERFORATED]
+    #         .fc2             Linear                                  [PERFORATED]
+    #     .block[3]            Conv2dNormActivation   (1x1 project)    [skipped -- Conv2d only]
+    #   features[16]           Conv2dNormActivation   (head 80 -> 480) [walker descends -- no Linear inside]
+    #   classifier.2           Linear                                  [PERFORATED]
+    #   classifier.5           Linear                                  [PERFORATED]
     #
     # DyMN (dymn04_as):
-    #   model.in_c            Conv2dNormActivation (stem)           [tracked via track_module_ids]
-    #   model.layers[0..14]   DY_Block             (body)           [perforated w/ DYBlockProcessor]
-    #   model.out_c           Conv2dNormActivation (head)           [tracked -- see below]
-    #   model.classifier.2    Linear               (384 -> 512)     [perforated]
-    #   model.classifier.5    Linear               (512 -> 200)     [perforated]
+    #   model.in_c             Conv2dNormActivation   (stem)           [tracked via track_module_ids]
+    #   model.layers[0..14]    DY_Block               (body)           [perforated w/ DYBlockProcessor]
+    #   model.out_c            Conv2dNormActivation   (head)           [tracked -- see below]
+    #   model.classifier.2     Linear                                  [perforated]
+    #   model.classifier.5     Linear                                  [perforated]
     #
     # DY_Block is a multi-input module (`forward(x, g=None)`, where `g` is
     # the upstream global-context vector). Without intervention PAI's default
     # dendrite clone receives only `x` and `g` defaults to None -- every
     # DynamicConv inside the clone then produces near-constant kernels and
-    # PBScore sits at ~0 (exactly what the first DyMN run's PBScore plot
-    # showed for all 15 blocks). The training script fixes this by
-    # registering a ``DYBlockProcessor`` via ``modules_with_processing``
-    # (customization.md section 2.2) so the dendrite sees the same
-    # ``(x, g)`` pair as the neuron.
+    # PBScore sits at ~0. The training script fixes this by registering a
+    # ``DYBlockProcessor`` via ``modules_with_processing`` (customization.md
+    # section 2.2) so the dendrite sees the same ``(x, g)`` pair as the
+    # neuron. ``out_c`` stays track-only: prior-run PBScore on it was ~0
+    # (wide projection right before global pooling).
     #
-    # ``out_c`` remains track-only: empirically its PBScore was ~0 even with
-    # full wrapping (wide 64->384 projection right before global pooling --
-    # no residual error left to model once the pretrained main branch runs).
-    #
-    # None  -> default module-class perforation (DY_Block + Linear).
-    # List  -> restrict dendrites to these dotted module ids only.
+    # Whitelist of exact dotted ids to perforate. Set to None for the usual
+    # class-based wiring above. When a list is given, PAI restricts dendrite
+    # addition to these exact ids (still subject to the class-name filter).
     perforate_module_ids: Optional[List[str]] = None
 
     # Skip these dotted module ids even if a class/id filter would otherwise
-    # pick them up. The stem conv rarely benefits from dendrites per the
-    # skill's "top-layers only" guidance. Covers both MN (`.features.0`) and
-    # DyMN (`.in_c`) naming conventions; PAI silently ignores ids that don't
-    # exist in the current model.
+    # pick them up. Kept for DyMN's `.in_c` stem. For MobileNet the probe-
+    # validated Linear-only class filter already ignores the stem (there are
+    # no Linears inside `features.0`), so entries like `.features.0` are
+    # no-ops but are retained for compatibility with the DyMN path. PAI
+    # silently ignores ids that don't exist in the current model.
     track_module_ids: Tuple[str, ...] = (".features.0", ".in_c")
 
     # Class *names* to wrap as track-only (NOT perforated, gradients pass
@@ -230,7 +256,7 @@ class Config:
         # Derive run slug + wandb metadata from model + pai unless caller
         # supplied explicit overrides. This keeps `Config()` zero-arg usable
         # while still letting power users pin any field.
-        slug = self.experiment_name or f"FSD50K-{self.model.model_name}-pai-{self.pai.switch_mode}"
+        slug = self.experiment_name or f"FSD50K-{self.model.model_name}-pai-{self.pai.switch_mode}-new"
         self.experiment_name = slug
         if not self.wandb.name:
             self.wandb.name = slug

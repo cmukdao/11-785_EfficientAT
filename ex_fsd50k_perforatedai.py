@@ -6,27 +6,39 @@ Usage:
 
 PERFORATION STRATEGY (per backbone)
 -----------------------------------
-MobileNet (`mn*_as`): each `InvertedResidual` block + the final
-`Conv2dNormActivation` (80->480) are wrapped as `PAINeuronModule` units,
-along with both classifier `Linear`s (skill step 7.2, block-level wrap).
-The stem conv is excluded via `track_module_ids`.
+MobileNet (`mn*_as`): probe-validated "SE + classifier Linears only"
+strategy. `probe_grad_magnitude.py` (see `probes/mn04_as_plateau.csv`)
+showed SE-block `Linear`s and the two classifier `Linear`s carry >=26x
+the gradient magnitude of any IR/C2NA block wrapper at the pre-switch
+plateau. We therefore:
 
-DyMN (`dymn*_as`): all 15 `DY_Block`s + the two classifier `Linear`s are
-perforated. `DY_Block.forward(x, g=None)` is a multi-input module (feature
-map + upstream global context), so PAI's default single-tensor dendrite
-machinery silently drops `g`. We fix this with `DYBlockProcessor`
-registered via `modules_with_processing` (customization.md section 2.2) so
-the dendrite clone receives the same `(x, g)` pair as the neuron.
+  1. `set_module_names_to_perforate(["Linear"])` -- REPLACE PAI's default
+     `["Conv2d", "Linear", ...]` so the walker does NOT wrap Conv2d
+     leaves inside `InvertedResidual` / `Conv2dNormActivation`.
+  2. No class entries in `modules_to_perforate` for MN (empty list).
+     With nothing in the class filter except "Linear", the walker
+     descends through every IR / C2NA and only wraps the Linears it
+     finds on the way down.
+  3. Track `Conv2d` and `BatchNorm2d` by class name so PAI's "unwrapped
+     module" audit stays clean (these become `TrackedNeuronModule`
+     wrappers with no dendrites, just gradient pass-through).
 
-`Conv2dNormActivation` is still track-only on DyMN: empirically the `out_c`
-head sat at PBScore ~0 for the entire prior run (wide 64->384 projection
-near the pooled output -- no residual error left to model), and the
-`in_c` stem is excluded by the skill's "no dendrites on low-level
-features" guidance anyway. The walker stops at both as atomic units.
+Effective perforation set for mn*_as:
+  - 15 x 2 SE Linears inside `features[N].block[2].conc_se_layers[i]`
+    (fc1 squeeze + fc2 excite)
+  - classifier.2 (pre-logit)
+  - classifier.5 (logit)
+Effective parameter overhead per dendrite set:  ~(SE + classifier) params,
+much smaller than the previous block-level wrap (~backbone params).
 
-To override per-experiment, set `config.pai.perforate_module_ids` in the
-config module. `TOP_ONLY_MODULE_IDS` is a convenience preset for
-parameter-efficient MN runs (features[11..16] + both classifier Linears).
+DyMN (`dymn*_as`): unchanged. All 15 `DY_Block`s + the two classifier
+`Linear`s are perforated. `DY_Block.forward(x, g=None)` is a multi-input
+module (feature map + upstream global context), so PAI's default single-
+tensor dendrite machinery silently drops `g`. We fix this with
+`DYBlockProcessor` registered via `modules_with_processing`
+(customization.md section 2.2) so the dendrite clone receives the same
+`(x, g)` pair as the neuron. `Conv2dNormActivation` remains track-only
+(empirical PBScore ~0 on `out_c`, stem excluded by `.in_c` skip).
 
 PAI reference: https://www.perforatedai.com/docs
 """
@@ -48,7 +60,12 @@ os.environ["PAITOKEN"] = PAI_TOKEN
 import wandb  
 import numpy as np  
 from tqdm import tqdm  
-import torch  
+import torch
+import torch.multiprocessing as torch_mp
+try:
+    torch_mp.set_sharing_strategy("file_system")
+except RuntimeError:
+    pass
 from torch.utils.data import DataLoader  
 from sklearn import metrics  
 import torch.nn.functional as F  
@@ -150,28 +167,36 @@ class DYBlockProcessor:
 # Per-model block registration
 # ----------------------------------------------------------------------------
 def _select_pai_blocks_for_model(model_name: str):
-    """Return ``(perforate_classes, perforate_names, track_classes, track_names)``.
+    """Return ``(perforate_classes, perforate_names, track_classes,
+    track_names, perforate_names_override)``.
 
     ``perforate_*``: classes wrapped as ``PAINeuronModule`` (get dendrites).
     ``track_*``:     classes wrapped as ``TrackedNeuronModule`` (no dendrites,
                      walker stops here so interior layers are untouched).
-    Both are registered by class object AND by short class name to be robust
-    against duplicate imports (identity check misses, name check hits).
+    ``perforate_names_override``: if non-None, REPLACES PAI's default
+    class-name perforate list (``Conv2d`` + ``Linear`` + ...) before
+    anything else is appended. Used on MobileNet to restrict wrapping to
+    ``Linear`` only so the walker descends through every IR/C2NA block.
 
-    MobileNet (`mn*`): `InvertedResidual` blocks and the head
-    `Conv2dNormActivation` are the canonical perforation targets -- they all
-    have clean `forward(x) -> y` semantics so PAI's default dendrite machinery
-    works out of the box. The stem is excluded via ``track_module_ids``.
+    Both perforate/track are registered by class object AND by short class
+    name to be robust against duplicate imports (identity check misses,
+    name check hits).
 
-    DyMN (`dymn*`): `DY_Block` is perforated as a single unit via the
-    ``DYBlockProcessor`` above -- the processor routes the multi-tensor
-    ``(x, g)`` inputs through the dendrite clone so its internal
-    ``DynamicConv / DyReLUB / CoordAtt`` see the real upstream global context
-    instead of a degenerate ``g=None``. ``Conv2dNormActivation`` stays
-    track-only: prior-run PBScore on ``out_c`` (64->384 head) was ~0 (wide
-    projection near the pooled output -- no residual error left to model),
-    and the stem ``in_c`` is excluded by the skill's "no dendrites on
-    low-level features" guidance via ``track_module_ids``.
+    MobileNet (`mn*`): probe-driven "Linear-only" strategy. The class list
+    is intentionally empty so the walker descends through every
+    ``InvertedResidual`` and ``Conv2dNormActivation``. The override list
+    ``["Linear"]`` is what actually pulls the trigger: PAI's walker finds
+    the SE ``fc1``/``fc2`` Linears inside each IR's ``ConcurrentSEBlock``,
+    plus both classifier Linears, and wraps those as ``PAINeuronModule``.
+    ``Conv2d`` + ``BatchNorm2d`` are tracked by class name to keep PAI's
+    "unwrapped module" audit clean (they become no-op gradient pass-throughs
+    rather than being flagged). See probes/mn04_as_plateau.csv for the
+    gradient-magnitude evidence supporting this targeting.
+
+    DyMN (`dymn*`): unchanged block-level strategy. ``DY_Block`` is
+    perforated via ``DYBlockProcessor`` (multi-input forward needs
+    `pre_d`/`post_*` routing, customization.md section 2.2).
+    ``Conv2dNormActivation`` stays track-only.
     """
     family = model_name.lower()
     if family.startswith("dymn"):
@@ -179,12 +204,24 @@ def _select_pai_blocks_for_model(model_name: str):
         perforate_names = ["DY_Block"]
         track_classes = [Conv2dNormActivation]
         track_names = ["Conv2dNormActivation"]
+        perforate_names_override = None  # keep PAI default + DY_Block
     else:
-        perforate_classes = [InvertedResidual, Conv2dNormActivation]
-        perforate_names = ["InvertedResidual", "Conv2dNormActivation"]
+        # MobileNet: empty class list; the override below is what selects.
+        perforate_classes = []
+        perforate_names = []
         track_classes = []
-        track_names = []
-    return perforate_classes, perforate_names, track_classes, track_names
+        # Track the Conv2d/BN leaves so PAI's "unwrapped module" audit
+        # stays clean without us having to set
+        # `set_unwrapped_modules_confirmed(True)`.
+        track_names = ["Conv2d", "BatchNorm2d"]
+        perforate_names_override = ("Linear",)
+    return (
+        perforate_classes,
+        perforate_names,
+        track_classes,
+        track_names,
+        perforate_names_override,
+    )
 
 
 # ----------------------------------------------------------------------------
@@ -220,18 +257,35 @@ def _configure_pai(cfg: Config, save_name: str) -> None:
     GPA.pc.set_initial_correlation_batches(pai.initial_correlation_batches)
 
     # --- Module selection ---------------------------------------------------
-    # Block-level perforation: wrap each residual block as a single
-    # PAINeuronModule (rather than dendriting its inner Conv2d/Linear layers
-    # individually). The library-default name list already contains
-    # PAISequential/Conv1d/Conv2d/Conv3d/Linear, which covers the classifier
-    # Linears in both backbones.
+    # Perforation strategy differs by backbone:
+    #   - MobileNet:   REPLACE default class-name list with ["Linear"] so the
+    #                  walker descends through IR/C2NA and only wraps the
+    #                  SE fc1/fc2 Linears and classifier Linears it finds.
+    #   - DyMN:        append `DY_Block` to the default list for block-level
+    #                  dendrites on the dynamic backbone.
     #
-    # We register by class object AND by class-name string: the class-identity
-    # check in PAI can miss when the same class is imported via two paths
-    # (e.g. torchvision re-exports), but the short-name string match still hits.
-    perforate_classes, perforate_names, track_classes, track_names = (
-        _select_pai_blocks_for_model(cfg.model.model_name)
+    # We register classes both by object AND by class-name string: the
+    # class-identity check in PAI can miss when the same class is imported
+    # via two paths (e.g. torchvision re-exports), but the short-name string
+    # match still hits.
+    (
+        perforate_classes,
+        perforate_names,
+        track_classes,
+        track_names,
+        perforate_names_override,
+    ) = _select_pai_blocks_for_model(cfg.model.model_name)
+
+    # The REPLACE step (if any) must come first so subsequent appends stack
+    # on top of a clean slate. A config-level override beats the per-family
+    # default.
+    effective_override = (
+        pai.perforate_names_override
+        if pai.perforate_names_override is not None
+        else perforate_names_override
     )
+    if effective_override is not None:
+        GPA.pc.set_module_names_to_perforate(list(effective_override))
     if perforate_classes:
         GPA.pc.append_modules_to_perforate(perforate_classes)
     if perforate_names:
@@ -607,7 +661,6 @@ def train(cfg: Config = default_config):
             break
         elif restructured:
             # Topology changed: optimizer state is stale, rebuild with the
-            # EXACT SAME args (skill Step 7 requirement).
             optim_args = {'params': model.parameters(), 'lr': oc.lr, 'weight_decay': oc.weight_decay}
             sched_args = {'mode': oc.scheduler_mode, 'patience': oc.scheduler_patience}
             optimizer, _ = GPA.pai_tracker.setup_optimizer(model, optim_args, sched_args)
