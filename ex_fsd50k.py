@@ -343,7 +343,7 @@ if __name__ == '__main__':
     parser.add_argument('--n_epochs', type=int, default=80,
                         help="Hard upper bound on number of training epochs. "
                              "Set to 0 or negative to train until early stopping triggers.")
-    parser.add_argument('--patience', type=int, default=10,
+    parser.add_argument('--patience', type=int, default=15,
                         help="Early stopping patience: stop if validation mAP does "
                              "not improve for this many consecutive epochs.")
     parser.add_argument('--min_delta', type=float, default=1e-3,
