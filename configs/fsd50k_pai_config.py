@@ -4,19 +4,84 @@ Configuration for FSD50K fine-tuning with Perforated AI Dendrites.
 Usage:
 
     from configs.fsd50k_pai_config import config
-    train(config)                     # defaults
+    train(config)                     # defaults (Linear-only, S0)
 
     # or customise a sub-config:
     cfg = Config(model=ModelConfig(model_name="mn10_as"))
     cfg.data.batch_size = 32
     train(cfg)
 
+    # or set a named PAI strategy on the root config (no separate factory call):
+    cfg = Config(pai_preset="c2na_plus_logit")   # every C2NA + classifier.5
+    train(cfg)
+
 Derived fields (`experiment_name`, `wandb.name/group/notes`) are filled
 in by `Config.__post_init__` from `model.model_name` + `pai.switch_mode`
-unless you pass explicit values.
+unless you pass explicit values. Non-default ``pai_preset`` patches
+``PAIConfig`` and picks a default ``experiment_name`` slug unless you set
+it yourself.
 """
-from dataclasses import dataclass, field
-from typing import List, Optional, Tuple
+from dataclasses import dataclass, field, replace
+from typing import Dict, List, Optional, Tuple
+
+# --- PAI strategy presets (edit ``Config.pai_preset`` or ``config = Config(...)``) ---
+PAI_PRESET_DEFAULT = "default"
+PAI_PRESET_C2NA_PLUS_LOGIT = "c2na_plus_logit"
+PAI_PRESET_CLASSIFIER5_ONLY = "classifier5_only"
+PAI_PRESET_HEAD_LATE_SE = "head_late_se"
+
+_HEAD_LATE_SE_MODULE_IDS: Tuple[str, ...] = (
+    ".classifier.2",
+    ".classifier.5",
+) + tuple(
+    f".features.{b}.block.2.conc_se_layers.0.fc1"
+    for b in (11, 12, 13, 14, 15)
+) + tuple(
+    f".features.{b}.block.2.conc_se_layers.0.fc2"
+    for b in (12, 14, 15)
+)
+
+_PRESET_PAI_PATCHES: Dict[str, dict] = {
+    PAI_PRESET_C2NA_PLUS_LOGIT: {
+        "perforate_names_override": ("Conv2dNormActivation",),
+        "perforate_module_ids": [".classifier.5"],
+        "track_module_names": ("Linear",),
+        "track_module_ids": (),
+    },
+    PAI_PRESET_CLASSIFIER5_ONLY: {
+        "perforate_names_override": ("Linear",),
+        "perforate_module_ids": [".classifier.5"],
+        "track_module_names": ("Linear",),
+        "track_module_ids": (".features.0", ".in_c"),
+    },
+    PAI_PRESET_HEAD_LATE_SE: {
+        "perforate_names_override": ("Linear",),
+        "perforate_module_ids": list(_HEAD_LATE_SE_MODULE_IDS),
+        "track_module_names": ("Linear",),
+        "track_module_ids": (".features.0", ".in_c"),
+    },
+}
+
+# Wandb / save slug fragment when ``experiment_name`` is left empty.
+_PRESET_EXPERIMENT_SUFFIX: Dict[str, str] = {
+    PAI_PRESET_C2NA_PLUS_LOGIT: "c2na+logit",
+    PAI_PRESET_CLASSIFIER5_ONLY: "classifier5-only",
+    PAI_PRESET_HEAD_LATE_SE: "head-late-se",
+}
+
+
+def _apply_pai_preset(cfg: "Config") -> None:
+    """Merge preset-specific ``PAIConfig`` fields onto ``cfg.pai``."""
+    key = (cfg.pai_preset or PAI_PRESET_DEFAULT).strip()
+    if key == PAI_PRESET_DEFAULT:
+        return
+    patches = _PRESET_PAI_PATCHES.get(key)
+    if patches is None:
+        choices = sorted({PAI_PRESET_DEFAULT, *_PRESET_PAI_PATCHES})
+        raise ValueError(
+            f"Unknown Config.pai_preset={key!r}. Valid choices: {choices}"
+        )
+    cfg.pai = replace(cfg.pai, **patches)
 
 
 # ============================================================================
@@ -73,11 +138,75 @@ class OptimConfig:
     lr: float = 7e-5
     weight_decay: float = 0.0
     mixup_alpha: float = 0.3
-    # ReduceLROnPlateau is managed by the PAI tracker. `scheduler_patience`
-    # must be < pai.n_epochs_to_switch so a plateau is detected before PAI
-    # switches modes.
+
+    # ------------------------------------------------------------------ LR schedule
+    # Which schedule to run on top of Adam:
+    #   "plateau"       -> PAI-managed ReduceLROnPlateau (uses
+    #                      scheduler_patience / scheduler_mode below). The
+    #                      historical PAI baseline.
+    #   "lambda_warmup" -> mirror ex_fsd50k.py: exp warmup + linear rampdown
+    #                      + floor, via exp_warmup_linear_down(...). Driven
+    #                      manually against optimizer.param_groups so PAI's
+    #                      validation hook cannot clobber it. A no-op
+    #                      LambdaLR is still registered with the PAI tracker
+    #                      so optimizer-rebuild-on-restructure keeps working.
+    #                      See `lambda_warmup_per_cycle` below -- you almost
+    #                      certainly want True (default).
+    scheduler_name: str = "plateau"
+
+    # --- "plateau" params (ReduceLROnPlateau).
+    # `scheduler_patience` must be < pai.n_epochs_to_switch so a plateau is
+    # detected before PAI switches modes when pai.switch_mode == "fixed". In
+    # "history" mode PAI does its own plateau detection so patience mostly
+    # just controls how fast LR decays within a given PAI phase.
+    #
+    # Tuning notes (motivated by the empirical LR log on mn04_as):
+    # * factor=0.1 (PyTorch default) drops LR 10x per trigger. With
+    #   patience=5 and no cooldown, a long neuron phase hit three consecutive
+    #   triggers and dragged LR from 7e-5 -> 7e-8 in 18 epochs, effectively
+    #   freezing training until the next PAI restructure reset it. Prefer
+    #   factor=0.5 (half per trigger) and a non-zero cooldown.
+    # * cooldown forces a gap between consecutive triggers so RLoP doesn't
+    #   fire 3x back-to-back while the metric is legitimately flat during
+    #   dendrite training (neuron weights frozen -> val mAP won't improve
+    #   regardless of LR; dropping further is pointless).
+    # * min_lr caps the bleeding. Below ~1e-7 Adam is numerically stationary
+    #   on fp32 weights; going lower just wastes the rest of the PAI phase.
     scheduler_patience: int = 5
     scheduler_mode: str = "max"
+    scheduler_factor: float = 0.5        # per-trigger multiplier (was 0.1)
+    scheduler_cooldown: int = 3          # epochs of silence after a trigger
+    scheduler_min_lr: float = 1e-7       # hard floor for RLoP
+
+    # --- "lambda_warmup" params (mirror ex_fsd50k.py defaults).
+    # Schedule shape (applied to whatever epoch counter we feed in):
+    #   e = 0 .. warm_up_len - 1           exponential rampup 0 -> 1
+    #   e = warm_up_len .. ramp_down_start - 1   constant at 1.0
+    #   e = ramp_down_start .. +ramp_down_len    linear 1 -> last_lr_value
+    #   after that                         constant at last_lr_value
+    #
+    # If lambda_warmup_per_cycle is True (recommended), the counter RESETS
+    # to 0 on every PAI `restructured=True` event, i.e. every time dendrites
+    # are added and the optimizer is rebuilt. Each PAI cycle then gets its
+    # own warmup+rampdown, which matches what ex_fsd50k.py does for a single
+    # fine-tune. Tune (warm_up_len, ramp_down_start, ramp_down_len) so the
+    # full curve fits inside a typical cycle length; otherwise the schedule
+    # will keep restarting mid-warmup and never reach full lr.
+    #
+    # If False, the schedule runs over the whole PAI training run using the
+    # absolute epoch counter. Only use this if you expect your total PAI
+    # epoch count to be close to ramp_down_start + ramp_down_len; otherwise
+    # the curve gets stretched/truncated and most of training sits at the
+    # last_lr_value floor.
+    # Tuned for long PAI history segments (~30-40 epochs): long hold at full
+    # LR, then a gradual linear decay. Short gaps (~11 epochs) may never reach
+    # ramp_down_start and stay near full LR until the next switch — intentional
+    # if you prioritize long segments over short-cycle curve completion.
+    lambda_warmup_per_cycle: bool = True
+    warm_up_len: int = 3
+    ramp_down_start: int = 10
+    ramp_down_len: int = 25
+    last_lr_value: float = 0.01
 
 
 @dataclass
@@ -125,7 +254,7 @@ class PAIConfig:
     # None  -> keep PAI's library default.
     # Tuple -> overwrite with these class names only.
     perforate_names_override: Optional[Tuple[str, ...]] = None
-
+    
     # Full-model layout reference (MobileNet mn04_as, width_mult=0.4):
     #
     #   features[0]            Conv2dNormActivation   (stem, 1 -> 8)   [walker descends -- no Linear inside]
@@ -206,8 +335,8 @@ class PAIConfig:
     running_average_pb: bool = False
 
     # ----------------------- mode-P "last improved" thresholds (per-node) ---
-    pai_improvement_threshold: float = 0.5
-    pai_improvement_threshold_raw: float = 0.01
+    pai_improvement_threshold: float = 0.1
+    pai_improvement_threshold_raw: float = 0.001
 
     # --------------------------------- validation improvement thresholds ----
     # PAI getter returns element `[min(len-1, num_dendrites_added)]`, so the
@@ -216,7 +345,7 @@ class PAIConfig:
     # Values of 0.0 (the earlier default here) disabled plateau detection
     # entirely -- the first arch-switch only fired via raw epoch timeout at
     # epoch ~80 instead of ~30, wasting compute on a plateaued model.
-    improvement_threshold: Tuple[float, ...] = (0.01, 0.001, 0.0)
+    improvement_threshold: Tuple[float, ...] = (0.001, 0.0001, 0.0)
     # mAP is reported on the 0-100 scale (see `add_validation_score(mAP*100,..)`),
     improvement_threshold_raw: float = 1e-2
 
@@ -249,15 +378,31 @@ class Config:
     optim: OptimConfig = field(default_factory=OptimConfig)
     pai: PAIConfig = field(default_factory=PAIConfig)
     wandb: WandbConfig = field(default_factory=WandbConfig)
+    # PAI layout preset: "default" (Linear-only MN / DyMN wiring from the
+    # training script) or a key from ``_PRESET_PAI_PATCHES`` (e.g. ``c2na_plus_logit``).
+    pai_preset: str = PAI_PRESET_HEAD_LATE_SE
     experiment_name: str = ""
     cuda: bool = True
 
     def __post_init__(self) -> None:
+        _apply_pai_preset(self)
         # Derive run slug + wandb metadata from model + pai unless caller
         # supplied explicit overrides. This keeps `Config()` zero-arg usable
         # while still letting power users pin any field.
-        slug = self.experiment_name or f"FSD50K-{self.model.model_name}-pai-{self.pai.switch_mode}-new"
-        self.experiment_name = slug
+        if not self.experiment_name:
+            if self.pai_preset != PAI_PRESET_DEFAULT:
+                suffix = _PRESET_EXPERIMENT_SUFFIX.get(
+                    self.pai_preset,
+                    self.pai_preset.replace("_", "-"),
+                )
+                self.experiment_name = (
+                    f"FSD50K-{self.model.model_name}-pai-{suffix}"
+                )
+            else:
+                self.experiment_name = (
+                    f"FSD50K-{self.model.model_name}-pai-{self.pai.switch_mode}-new"
+                )
+        slug = self.experiment_name
         if not self.wandb.name:
             self.wandb.name = slug
         if not self.wandb.group:
@@ -268,6 +413,7 @@ class Config:
             )
 
 
-# Default instance consumed by the training script. Construct a fresh
-# `Config(...)` or mutate this object in-place to customise a run.
+# Default instance consumed by the training script. Switch PAI layout here,
+# e.g. ``config = Config(pai_preset=PAI_PRESET_C2NA_PLUS_LOGIT)``, or mutate
+# fields in-place after import.
 config = Config()

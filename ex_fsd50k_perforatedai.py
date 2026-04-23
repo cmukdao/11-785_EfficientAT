@@ -19,9 +19,9 @@ plateau. We therefore:
      With nothing in the class filter except "Linear", the walker
      descends through every IR / C2NA and only wraps the Linears it
      finds on the way down.
-  3. Track `Conv2d` and `BatchNorm2d` by class name so PAI's "unwrapped
-     module" audit stays clean (these become `TrackedNeuronModule`
-     wrappers with no dendrites, just gradient pass-through).
+  3. Track each ``Conv2dNormActivation`` block as a whole (class name) so
+     PAI's walker stops at the C2NA boundary: inner ``Conv2d`` / ``BatchNorm2d``
+     are not wrapped separately (``TrackedNeuronModule`` on the block only).
 
 Effective perforation set for mn*_as:
   - 15 x 2 SE Linears inside `features[N].block[2].conc_se_layers[i]`
@@ -77,7 +77,7 @@ from models.dymn.model import get_model as get_dymn
 from models.dymn.dy_block import DY_Block  
 from models.preprocess import AugmentMelSTFT  
 from helpers.init import worker_init_fn  
-from helpers.utils import NAME_TO_WIDTH, mixup  
+from helpers.utils import NAME_TO_WIDTH, exp_warmup_linear_down, mixup  
 
 from torchvision.ops.misc import Conv2dNormActivation  
 
@@ -188,10 +188,10 @@ def _select_pai_blocks_for_model(model_name: str):
     ``["Linear"]`` is what actually pulls the trigger: PAI's walker finds
     the SE ``fc1``/``fc2`` Linears inside each IR's ``ConcurrentSEBlock``,
     plus both classifier Linears, and wraps those as ``PAINeuronModule``.
-    ``Conv2d`` + ``BatchNorm2d`` are tracked by class name to keep PAI's
-    "unwrapped module" audit clean (they become no-op gradient pass-throughs
-    rather than being flagged). See probes/mn04_as_plateau.csv for the
-    gradient-magnitude evidence supporting this targeting.
+    Each ``Conv2dNormActivation`` is tracked by class name so PAI's walker
+    wraps the whole block (inner conv/BN are not visited separately). See
+    probes/mn04_as_plateau.csv for the gradient-magnitude evidence supporting
+    this targeting.
 
     DyMN (`dymn*`): unchanged block-level strategy. ``DY_Block`` is
     perforated via ``DYBlockProcessor`` (multi-input forward needs
@@ -209,11 +209,8 @@ def _select_pai_blocks_for_model(model_name: str):
         # MobileNet: empty class list; the override below is what selects.
         perforate_classes = []
         perforate_names = []
-        track_classes = []
-        # Track the Conv2d/BN leaves so PAI's "unwrapped module" audit
-        # stays clean without us having to set
-        # `set_unwrapped_modules_confirmed(True)`.
-        track_names = ["Conv2d", "BatchNorm2d"]
+        track_classes = [Conv2dNormActivation]
+        track_names = ["Conv2dNormActivation"]
         perforate_names_override = ("Linear",)
     return (
         perforate_classes,
@@ -259,8 +256,9 @@ def _configure_pai(cfg: Config, save_name: str) -> None:
     # --- Module selection ---------------------------------------------------
     # Perforation strategy differs by backbone:
     #   - MobileNet:   REPLACE default class-name list with ["Linear"] so the
-    #                  walker descends through IR/C2NA and only wraps the
-    #                  SE fc1/fc2 Linears and classifier Linears it finds.
+    #                  walker descends through IRs (C2NA blocks are track-
+    #                  wrapped as a whole) and only wraps the SE fc1/fc2
+    #                  Linears and classifier Linears it finds.
     #   - DyMN:        append `DY_Block` to the default list for block-level
     #                  dendrites on the dynamic backbone.
     #
@@ -528,11 +526,57 @@ def train(cfg: Config = default_config):
     )
 
     # ---------------- PAI-managed optimizer + scheduler --------------------
+    # Two supported schedules (selected via cfg.optim.scheduler_name):
+    #
+    #   "plateau"       -> PAI-managed ReduceLROnPlateau. PAI's
+    #                      add_validation_score() steps it with the mAP
+    #                      metric each epoch. Used by the original PAI
+    #                      baseline and works with switch_mode="fixed".
+    #
+    #   "lambda_warmup" -> mirror ex_fsd50k.py: exp warmup + linear ramp-down
+    #                      + constant floor. Implemented by manually writing
+    #                      lr * lr_lambda(epoch) into optimizer.param_groups
+    #                      at the START of every epoch (see training loop).
+    #                      A no-op LambdaLR(lr_lambda=1.0) is still registered
+    #                      with the PAI tracker so optimizer-rebuild-on-
+    #                      restructure (which re-instantiates the scheduler
+    #                      class) keeps working without surprising PAI's
+    #                      internal scheduler.step() calls -- LambdaLR.step()
+    #                      is a no-op on a constant lambda, and PAI won't
+    #                      pass a metric value to a non-plateau scheduler
+    #                      class.
     oc = cfg.optim
     GPA.pai_tracker.set_optimizer(torch.optim.Adam)
-    GPA.pai_tracker.set_scheduler(torch.optim.lr_scheduler.ReduceLROnPlateau)
     optim_args = {'params': model.parameters(), 'lr': oc.lr, 'weight_decay': oc.weight_decay}
-    sched_args = {'mode': oc.scheduler_mode, 'patience': oc.scheduler_patience}
+
+    lr_lambda = None  # populated below for the "lambda_warmup" branch
+
+    if oc.scheduler_name == "plateau":
+        GPA.pai_tracker.set_scheduler(torch.optim.lr_scheduler.ReduceLROnPlateau)
+        sched_args = {
+            'mode': oc.scheduler_mode,
+            'patience': oc.scheduler_patience,
+            'factor': oc.scheduler_factor,
+            'cooldown': oc.scheduler_cooldown,
+            'min_lr': oc.scheduler_min_lr,
+        }
+    elif oc.scheduler_name == "lambda_warmup":
+        GPA.pai_tracker.set_scheduler(torch.optim.lr_scheduler.LambdaLR)
+        # No-op LambdaLR so PAI's rebuild path is safe; real schedule is
+        # applied manually to param_groups at the top of each epoch.
+        sched_args = {'lr_lambda': (lambda _e: 1.0)}
+        lr_lambda = exp_warmup_linear_down(
+            oc.warm_up_len,
+            oc.ramp_down_len,
+            oc.ramp_down_start,
+            oc.last_lr_value,
+        )
+    else:
+        raise ValueError(
+            f"Unknown cfg.optim.scheduler_name={oc.scheduler_name!r}; "
+            "expected 'plateau' or 'lambda_warmup'."
+        )
+
     optimizer, _ = GPA.pai_tracker.setup_optimizer(model, optim_args, sched_args)
 
     # ---------------- Training loop ----------------------------------------
@@ -543,12 +587,28 @@ def train(cfg: Config = default_config):
     best_val_mAP, best_val_epoch = float("-inf"), -1
 
     epoch = -1
+    # schedule_epoch drives lr_lambda. In per-cycle mode it is reset to 0
+    # every time PAI restructures (see restructured-branch below), so each
+    # PAI cycle gets its own warmup+rampdown. In global mode it follows the
+    # absolute epoch counter.
+    schedule_epoch = 0
     while True:
         epoch += 1
         mel.train()
         model.train()
         train_loss_list = []
         train_targets, train_outputs = [], []
+
+        # Apply the warmup+linear-down schedule directly to the optimizer
+        # each epoch, mirroring ex_fsd50k.py's LambdaLR(exp_warmup_linear_down).
+        # Done at epoch-start so it also overrides any LR change PAI made
+        # during the prior epoch's add_validation_score() / restructure.
+        if lr_lambda is not None:
+            sched_idx = schedule_epoch if oc.lambda_warmup_per_cycle else epoch
+            scale = float(lr_lambda(sched_idx))
+            for pg in optimizer.param_groups:
+                pg['lr'] = oc.lr * scale
+        schedule_epoch += 1
 
         pbar = tqdm(dl)
         pbar.set_description(
@@ -661,10 +721,25 @@ def train(cfg: Config = default_config):
             break
         elif restructured:
             # Topology changed: optimizer state is stale, rebuild with the
+            # same scheduler family we configured at startup.
             optim_args = {'params': model.parameters(), 'lr': oc.lr, 'weight_decay': oc.weight_decay}
-            sched_args = {'mode': oc.scheduler_mode, 'patience': oc.scheduler_patience}
+            if oc.scheduler_name == "plateau":
+                sched_args = {
+                    'mode': oc.scheduler_mode,
+                    'patience': oc.scheduler_patience,
+                    'factor': oc.scheduler_factor,
+                    'cooldown': oc.scheduler_cooldown,
+                    'min_lr': oc.scheduler_min_lr,
+                }
+            else:  # "lambda_warmup"
+                sched_args = {'lr_lambda': (lambda _e: 1.0)}
             optimizer, _ = GPA.pai_tracker.setup_optimizer(model, optim_args, sched_args)
             scaler = torch.amp.GradScaler(device.type, enabled=amp_enabled)
+            # Fresh PAI cycle on a new architecture: restart the warmup+
+            # rampdown curve from 0 so the new (larger) model gets the same
+            # careful warm start the initial neuron cycle did.
+            if lr_lambda is not None and oc.lambda_warmup_per_cycle:
+                schedule_epoch = 0
 
 
 # ----------------------------------------------------------------------------
