@@ -15,6 +15,22 @@ Usage:
     cfg = Config(pai_preset="c2na_plus_logit")   # every C2NA + classifier.5
     train(cfg)
 
+    # or RESUME an existing run's pre-first-switch snapshot with a new
+    # dendrite-phase schedule (keeps perforation layout, swaps switch_mode
+    # / p_epochs_to_switch):
+    cfg = Config(
+        pai_preset="head_late_se",
+        pai=PAIConfig(
+            switch_mode="history",
+            p_epochs_to_switch=8,   # new value -- drives next dendrite phase
+            resume_from_folder="pai/FSD50K-mn04_as-pai-head-late-se",
+            resume_checkpoint="beforeSwitch_0",   # default; omit to use it
+            resume_force_neuron_mode=True,        # restart plateau clock fresh
+        ),
+        experiment_name="FSD50K-mn04_as-pai-head-late-se-resume-p8",
+    )
+    train(cfg)
+
 Derived fields (`experiment_name`, `wandb.name/group/notes`) are filled
 in by `Config.__post_init__` from `model.model_name` + `pai.switch_mode`
 unless you pass explicit values. Non-default ``pai_preset`` patches
@@ -22,18 +38,29 @@ unless you pass explicit values. Non-default ``pai_preset`` patches
 it yourself.
 """
 from dataclasses import dataclass, field, replace
-from typing import Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional, Tuple
 
 # --- PAI strategy presets (edit ``Config.pai_preset`` or ``config = Config(...)``) ---
 PAI_PRESET_DEFAULT = "default"
 PAI_PRESET_C2NA_PLUS_LOGIT = "c2na_plus_logit"
 PAI_PRESET_CLASSIFIER5_ONLY = "classifier5_only"
+PAI_PRESET_CLASSIFIER2_ONLY = "classifier2_only"
+PAI_PRESET_CLASSIFIERS_ONLY = "classifiers_only"
 PAI_PRESET_HEAD_LATE_SE = "head_late_se"
+PAI_PRESET_CLASSIFIER2_LATE_SE = "classifier2_late_se"
 
 _HEAD_LATE_SE_MODULE_IDS: Tuple[str, ...] = (
     ".classifier.2",
     ".classifier.5",
 ) + tuple(
+    f".features.{b}.block.2.conc_se_layers.0.fc1"
+    for b in (11, 12, 13, 14, 15)
+) + tuple(
+    f".features.{b}.block.2.conc_se_layers.0.fc2"
+    for b in (12, 14, 15)
+)
+
+_LATE_SE_ONLY_MODULE_IDS: Tuple[str, ...] = tuple(
     f".features.{b}.block.2.conc_se_layers.0.fc1"
     for b in (11, 12, 13, 14, 15)
 ) + tuple(
@@ -54,9 +81,27 @@ _PRESET_PAI_PATCHES: Dict[str, dict] = {
         "track_module_names": ("Linear",),
         "track_module_ids": (".features.0", ".in_c"),
     },
+    PAI_PRESET_CLASSIFIER2_ONLY: {
+        "perforate_names_override": ("Linear",),
+        "perforate_module_ids": [".classifier.2"],
+        "track_module_names": ("Linear",),
+        "track_module_ids": (".features.0", ".in_c"),
+    },
+    PAI_PRESET_CLASSIFIERS_ONLY: {
+        "perforate_names_override": ("Linear",),
+        "perforate_module_ids": [".classifier.2", ".classifier.5"],
+        "track_module_names": ("Linear",),
+        "track_module_ids": (".features.0", ".in_c"),
+    },
     PAI_PRESET_HEAD_LATE_SE: {
         "perforate_names_override": ("Linear",),
         "perforate_module_ids": list(_HEAD_LATE_SE_MODULE_IDS),
+        "track_module_names": ("Linear",),
+        "track_module_ids": (".features.0", ".in_c"),
+    },
+    PAI_PRESET_CLASSIFIER2_LATE_SE: {
+        "perforate_names_override": ("Linear",),
+        "perforate_module_ids": [".classifier.2", *list(_LATE_SE_ONLY_MODULE_IDS)],
         "track_module_names": ("Linear",),
         "track_module_ids": (".features.0", ".in_c"),
     },
@@ -66,7 +111,10 @@ _PRESET_PAI_PATCHES: Dict[str, dict] = {
 _PRESET_EXPERIMENT_SUFFIX: Dict[str, str] = {
     PAI_PRESET_C2NA_PLUS_LOGIT: "c2na+logit",
     PAI_PRESET_CLASSIFIER5_ONLY: "classifier5-only",
+    PAI_PRESET_CLASSIFIER2_ONLY: "classifier2-only",
+    PAI_PRESET_CLASSIFIERS_ONLY: "classifiers-only",
     PAI_PRESET_HEAD_LATE_SE: "head-late-se",
+    PAI_PRESET_CLASSIFIER2_LATE_SE: "classifier2-late-se",
 }
 
 
@@ -118,7 +166,6 @@ class ModelConfig:
     head_type: str = "mlp"
     se_dims: str = "c"
     num_classes: int = 200
-
 
 @dataclass
 class DataConfig:
@@ -213,6 +260,8 @@ class OptimConfig:
 class PAIConfig:
     """PAI knobs. See https://www.perforatedai.com/docs and perforatedai source."""
 
+    # ------------------------------------------------------------------- debug
+    print_model_layout: bool = False
     # ------------------------------------------------------------------ master
     perforated_bp: bool = True
     testing_dendrite_capacity: bool = False
@@ -316,43 +365,97 @@ class PAIConfig:
     unwrapped_modules_confirmed: bool = False
 
     # ----------------------------------------------------------- correlation
-    initial_correlation_batches: int = 8
+    initial_correlation_batches: int = 16
     using_safe_tensors: bool = True
 
     # ---------------------------------------------------------- switch mode
-    switch_mode: str = "history"           # "fixed" | "history"
-    fixed_switch_num: int = 5            # epochs between dendrite switches
-    first_fixed_switch_num: int = 15     # epochs before the first switch
+    switch_mode: str = "fixed"           # "fixed" | "history"
+    fixed_switch_num: int = 25            # epochs between dendrite switches
+    first_fixed_switch_num: int = 20     # epochs before the first switch
     n_epochs_to_switch: int = 10         # history: neuron plateau window
     p_epochs_to_switch: int = 5         # history: dendrite plateau window
     history_lookback: int = 1
 
     # --------------------------------------------------------- dendrite caps
-    cap_at_n: bool = False
-    max_dendrites: int = 3
+    cap_at_n: bool = True
+    max_dendrites: int = 2
+    # Hard stop: max consecutive epochs while tracker is in mode "p".
+    max_consecutive_epochs_in_p_mode: Optional[int] = None
 
     # --------------------------------------------------------- val smoothing
-    running_average_pb: bool = False
+    running_average_pb: bool = True
 
     # ----------------------- mode-P "last improved" thresholds (per-node) ---
     pai_improvement_threshold: float = 0.1
-    pai_improvement_threshold_raw: float = 0.001
+    pai_improvement_threshold_raw: float = 0.0001
 
     # --------------------------------- validation improvement thresholds ----
-    # PAI getter returns element `[min(len-1, num_dendrites_added)]`, so the
-    # list encodes per-stage plateau tolerance: strict (0.1 % rel) at arch 0,
-    # relaxed (0.01 %) once the first dendrite set lands, 0 once fully grown.
-    # Values of 0.0 (the earlier default here) disabled plateau detection
-    # entirely -- the first arch-switch only fired via raw epoch timeout at
-    # epoch ~80 instead of ~30, wasting compute on a plateaued model.
-    improvement_threshold: Tuple[float, ...] = (0.001, 0.0001, 0.0)
-    # mAP is reported on the 0-100 scale (see `add_validation_score(mAP*100,..)`),
-    improvement_threshold_raw: float = 1e-2
+    improvement_threshold: Tuple[float, ...] = (0.01, 0.0001, 0.0)
+    # mAP is reported on the native 0-1 scale (see `add_validation_score(mAP,..)`).
+    improvement_threshold_raw: float = 0.0001
 
     # --------------------------------- candidate dendrite init + stability --
     candidate_weight_initialization_multiplier: float = 0.005
     candidate_grad_clipping: float = 1.0
     drawing_extra_graphs: bool = True
+
+    # ------------------------------------------- resume from prior PAI save --
+    # Resume training from a checkpoint written by a *previous* PAI run
+    # (``UPA.save_system`` format = ``{name}.pt`` with tracker_string buffer).
+    # Canonical target: ``beforeSwitch_0.pt`` -- the snapshot PAI writes at the
+    # end of the initial neuron cycle, right before the first dendrite switch.
+    # Loading that lets you take a fully-trained neuron baseline and then
+    # drive the dendrite phase with *different* PAI hyper-parameters (e.g.
+    # a different ``switch_mode`` or ``p_epochs_to_switch``) without paying
+    # the cost of the neuron-only training again.
+    #
+    # Requirements
+    # ------------
+    # * ``ModelConfig`` (model_name, width, num_classes, head_type, se_dims)
+    #   must match the run that wrote the checkpoint -- the un-perforated
+    #   backbone has to produce identical Conv2d/Linear shapes.
+    # * The PAI wrapper layout (``perforate_names_override``,
+    #   ``perforate_module_ids``, ``track_module_names``, ``track_module_ids``)
+    #   must also match -- otherwise the state_dict keys won't align and
+    #   ``load_net_from_dict`` will error on missing/unexpected modules.
+    # * ``using_safe_tensors`` must match how the checkpoint was written
+    #   (both runs default to True, so usually a no-op).
+    #
+    # What IS restored
+    #   - neuron weights + BN stats on every wrapped module
+    #   - PAI tracker ``member_vars``: score history, switch_epochs,
+    #     num_epochs_run, mode, num_dendrites_added, ...
+    # What is NOT restored
+    #   - ``GPA.pc`` fields (switch_mode / p_epochs_to_switch / thresholds).
+    #     These come from the current Config and stay in effect after load,
+    #     which is exactly the "different P training mode setting" knob.
+    #   - optimizer / scheduler state (rebuilt post-load via
+    #     ``pai_tracker.setup_optimizer``).
+    #
+    # ``resume_from_folder`` is the directory containing ``{resume_checkpoint}.pt``
+    # (usually the prior run's ``pai/<experiment_name>`` save dir). Set to
+    # ``None`` (default) to disable. Paths are relative to the training
+    # script's CWD unless absolute.
+    resume_from_folder: Optional[str] = None
+    resume_checkpoint: str = "beforeSwitch_0"
+
+    # After ``load_system``, optionally slam the tracker back into neuron
+    # mode ("n") with ``epoch_last_improved = num_epochs_run``. Use this
+    # when the saved tracker was mid-switch ("n" that had just plateaued,
+    # about to flip to "p") and you want the *new* ``p_epochs_to_switch``
+    # / plateau thresholds to drive the next cycle from a clean starting
+    # point instead of immediately firing on the old plateau detection.
+    # ``load_system`` already clears ``current_best_validation_score`` and
+    # ``epoch_last_improved``; this adds a mode reset on top.
+    resume_force_neuron_mode: bool = False
+
+    # Generic escape hatch: any key -> value pair applied onto
+    # ``GPA.pai_tracker.member_vars`` after ``load_system`` and after the
+    # ``resume_force_neuron_mode`` handling. Use sparingly; typical examples:
+    #   {"switch_epochs": [], "num_epochs_run": 0}  -> start fresh counters
+    #   {"num_dendrites_added": 0}                  -> pretend arch is pristine
+    # Leave empty to keep PAI's own post-load defaults.
+    resume_tracker_overrides: Dict[str, Any] = field(default_factory=dict)
 
 
 @dataclass
@@ -378,9 +481,8 @@ class Config:
     optim: OptimConfig = field(default_factory=OptimConfig)
     pai: PAIConfig = field(default_factory=PAIConfig)
     wandb: WandbConfig = field(default_factory=WandbConfig)
-    # PAI layout preset: "default" (Linear-only MN / DyMN wiring from the
-    # training script) or a key from ``_PRESET_PAI_PATCHES`` (e.g. ``c2na_plus_logit``).
-    pai_preset: str = PAI_PRESET_HEAD_LATE_SE
+    # PAI layout preset: "default"eom ``_PRESET_PAI_PATCHES`` (e.g. ``c2na_plus_logit``).
+    pai_preset: str = PAI_PRESET_CLASSIFIER2_LATE_SE
     experiment_name: str = ""
     cuda: bool = True
 
@@ -396,11 +498,11 @@ class Config:
                     self.pai_preset.replace("_", "-"),
                 )
                 self.experiment_name = (
-                    f"FSD50K-{self.model.model_name}-pai-{suffix}"
+                    f"FSD50K-{self.model.model_name}-pai-{self.pai.switch_mode}-{suffix}"
                 )
             else:
                 self.experiment_name = (
-                    f"FSD50K-{self.model.model_name}-pai-{self.pai.switch_mode}-new"
+                    f"FSD50K-{self.model.model_name}-pai-{self.pai.switch_mode}"
                 )
         slug = self.experiment_name
         if not self.wandb.name:

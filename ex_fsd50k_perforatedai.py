@@ -83,7 +83,7 @@ from torchvision.ops.misc import Conv2dNormActivation
 
 from perforatedai import globals_perforatedai as GPA  
 from perforatedai import utils_perforatedai as UPA  
-import perforatedbp  # noqa: F401,E402  (imported for side effects / license check)
+import perforatedbp
 
 
 # ----------------------------------------------------------------------------
@@ -351,9 +351,10 @@ def _configure_pai(cfg: Config, save_name: str) -> None:
     # `improvement_threshold` must be a `list` (not tuple): PAIConfig's
     # getter checks `type(...) is list` exactly, and a tuple silently
     # defeats the per-dendrite-count indexing.
+    GPA.pc.set_improvement_threshold(list(pai.improvement_threshold))
     GPA.pc.set_pai_improvement_threshold(pai.pai_improvement_threshold)
     GPA.pc.set_pai_improvement_threshold_raw(pai.pai_improvement_threshold_raw)
-    GPA.pc.set_improvement_threshold(list(pai.improvement_threshold))
+    # Apply validation raw last (same ordering as `_reapply_validation_thresholds`).
     GPA.pc.set_improvement_threshold_raw(pai.improvement_threshold_raw)
 
     # --- Candidate dendrite init + stability -------------------------------
@@ -369,14 +370,14 @@ def _reapply_validation_thresholds(cfg: Config) -> None:
 
     Observed PAI quirk: running_average_pb and the four improvement
     thresholds are reset to library defaults during tracker initialization.
-    They must be re-applied AFTER `perforate_model` to stick for training.
+    Re-apply after `perforate_model` and after optional `load_system` (resume)
+    so training always sees the values from ``cfg.pai``.
     """
     pai = cfg.pai
-    GPA.pc.set_running_average_pb(pai.running_average_pb)
     GPA.pc.set_improvement_threshold(list(pai.improvement_threshold))
-    GPA.pc.set_improvement_threshold_raw(pai.improvement_threshold_raw)
     GPA.pc.set_pai_improvement_threshold(pai.pai_improvement_threshold)
     GPA.pc.set_pai_improvement_threshold_raw(pai.pai_improvement_threshold_raw)
+    GPA.pc.set_improvement_threshold_raw(pai.improvement_threshold_raw)
 
 
 def _perforate_model(model, save_name: str, maximizing_score: bool):
@@ -398,6 +399,102 @@ def _perforate_model(model, save_name: str, maximizing_score: bool):
         save_name=save_name,
         maximizing_score=maximizing_score,
     )
+
+
+def _maybe_resume_from_checkpoint(model, cfg: Config):
+    """Load a prior PAI save on top of the freshly-perforated model.
+
+    Called AFTER ``_perforate_model`` so the wrapper tree is already in
+    place -- ``UPA.load_system`` only populates weights + tracker state and
+    requires an identical wrapper layout.
+
+    Why this works with a *different* P-training-mode setting
+    --------------------------------------------------------
+    ``load_system`` restores:
+      - network ``state_dict`` (neuron weights + BN stats)
+      - PAI tracker ``member_vars`` via the serialized ``tracker_string``
+        buffer: score history, ``switch_epochs``, ``num_epochs_run``,
+        ``mode``, ``num_dendrites_added``, ...
+    ``load_system`` does NOT restore any field on ``GPA.pc``. Everything
+    configured by ``_configure_pai`` (switch_mode, p_epochs_to_switch,
+    thresholds, ...) stays in effect. So: set the new dendrite-phase
+    schedule via ``PAIConfig``, perforate, load, and the new schedule
+    drives the next cycle.
+
+    Flags
+    -----
+    ``cfg.pai.resume_from_folder`` is the directory containing
+    ``{resume_checkpoint}.pt`` (and the companion ``_pai.pt`` that
+    ``save_system`` emits for ``save_pai_net``). ``None`` disables the
+    whole codepath.
+
+    ``load_from_manual_save=True`` suppresses PAI's internal
+    ``start_epoch`` call inside ``load_system`` so the epoch counter
+    doesn't tick before the first training iteration (PAI's own
+    ``add_validation_score`` will advance it naturally).
+
+    Returns the model (possibly a new instance after load).
+    """
+    pai = cfg.pai
+    folder = pai.resume_from_folder
+    if not folder:
+        return model
+
+    name = pai.resume_checkpoint
+    ckpt_path = os.path.join(folder, f"{name}.pt")
+    if not os.path.isfile(ckpt_path):
+        raise FileNotFoundError(
+            f"[PAI resume] Checkpoint not found: {ckpt_path}. "
+            f"Set cfg.pai.resume_from_folder to a directory containing "
+            f"'{name}.pt' (PAI save_system format) or clear resume_from_folder."
+        )
+
+    mv_before = dict(GPA.pai_tracker.member_vars) if hasattr(GPA.pai_tracker, "member_vars") else {}
+    print(f"[PAI resume] Loading '{name}.pt' from '{folder}' "
+          f"(load_from_manual_save=True)")
+    model = UPA.load_system(
+        model,
+        folder,
+        name,
+        load_from_restart=False,
+        switch_call=False,
+        load_from_manual_save=True,
+    )
+
+    # PAI tracker serialized state is now in place. Apply any requested
+    # post-load surgery so the NEW PAI schedule can take over cleanly.
+    mv = GPA.pai_tracker.member_vars
+    if pai.resume_force_neuron_mode:
+        # Force "n" so the new switch_mode / p_epochs_to_switch / plateau
+        # thresholds evaluate against a fresh neuron phase starting now.
+        # load_system already zeroed current_best_validation_score and
+        # set epoch_last_improved = num_epochs_run; we additionally slam
+        # mode back to "n" in case the saved tracker was already flipped.
+        mv["mode"] = "n"
+        mv["epoch_last_improved"] = mv.get("num_epochs_run", 0)
+        mv["current_best_validation_score"] = 0
+        print("[PAI resume] Forced tracker.mode='n' (resume_force_neuron_mode=True)")
+
+    for key, value in (pai.resume_tracker_overrides or {}).items():
+        mv[key] = value
+        print(f"[PAI resume] tracker.member_vars[{key!r}] <- {value!r}")
+
+    # Short diff of a few headline tracker fields so the log shows the
+    # *effective* starting point of training after the load.
+    headline_keys = (
+        "mode",
+        "num_epochs_run",
+        "num_dendrites_added",
+        "epoch_last_improved",
+        "current_best_validation_score",
+        "switch_epochs",
+    )
+    print("[PAI resume] Tracker state after load:")
+    for k in headline_keys:
+        print(f"  {k:35s} before={mv_before.get(k, '<absent>')!r:>20}  "
+              f"after={mv.get(k, '<absent>')!r}")
+
+    return model
 
 
 def _report_dendrite_targets(model) -> None:
@@ -478,14 +575,20 @@ def train(cfg: Config = default_config):
         save_name=pai_save_dir,
         maximizing_score=True,  # mAP is "higher is better"
     )
-    _reapply_validation_thresholds(cfg)
+    # Optionally pour a prior run's pre-first-switch weights (+ tracker
+    # state) onto the freshly-perforated model. Most ``GPA.pc`` fields from
+    # ``_configure_pai`` persist across ``load_system``; running_average_pb
+    # and improvement thresholds are reasserted below after resume.
+    model = _maybe_resume_from_checkpoint(model, cfg)
     _report_dendrite_targets(model)
+    _reapply_validation_thresholds(cfg)
 
-    # Full post-perforation module tree: lets the user visually confirm
-    # which blocks became `PAINeuronModule` / `TrackedNeuronModule` and
-    # which stayed as plain `nn.Module`s.
-    print("[PAI] Model structure after perforation:")
-    print(model)
+    # Optional full post-perforation module tree: lets the user visually
+    # confirm which blocks became `PAINeuronModule` / `TrackedNeuronModule`
+    # and which stayed as plain `nn.Module`s.
+    if cfg.pai.print_model_layout:
+        print("[PAI] Model structure after perforation:")
+        print(model)
 
     model.to(device)
 
@@ -592,6 +695,7 @@ def train(cfg: Config = default_config):
     # PAI cycle gets its own warmup+rampdown. In global mode it follows the
     # absolute epoch counter.
     schedule_epoch = 0
+    consecutive_epochs_in_p = 0
     while True:
         epoch += 1
         mel.train()
@@ -669,10 +773,9 @@ def train(cfg: Config = default_config):
 
         # Canonical PAI extra-score registration (SKILL.md 7.1). The label
         # "train" is what `perforatedai-analyze` keys off for overfitting /
-        # train-val-gap diagnostics, so don't rename it. Value is on the
-        # 0-100 scale to match `add_validation_score(mAP * 100, ...)` below
-        # so both traces share the y-axis on PAI's auto-generated graphs.
-        GPA.pai_tracker.add_extra_score(train_mAP * 100.0, "train")
+        # train-val-gap diagnostics, so don't rename it. Keep this on the
+        # same 0-1 scale as add_validation_score(...) below.
+        GPA.pai_tracker.add_extra_score(train_mAP, "train")
         # Auxiliary trace: negated train loss so "higher = better" still
         # holds on the extra-score axis (PAI treats extras as informational).
         GPA.pai_tracker.add_extra_score(-train_loss_epoch, "NegTrainLoss")
@@ -684,11 +787,29 @@ def train(cfg: Config = default_config):
             best_val_mAP = mAP
             best_val_epoch = epoch
 
-        # PAI drives switching + "training complete" off mAP on the 0-100 scale.
-        model, restructured, training_complete = GPA.pai_tracker.add_validation_score(
-            mAP * 100.0, model
-        )
+        # PAI prints node-improvement / switch diagnostics inside add_validation_score.
+        # Raise verbosity only for this block, then restore the configured default.
+        GPA.pc.set_verbose(cfg.pai.verbose)
+        try:
+            # PAI drives switching + "training_complete" off validation mAP.
+            model, restructured, training_complete = GPA.pai_tracker.add_validation_score(
+                mAP, model
+            )
+        finally:
+            GPA.pc.set_verbose(False)
         model.to(device)
+        mv = GPA.pai_tracker.member_vars
+        if mv.get("mode") == "p":
+            consecutive_epochs_in_p += 1
+        else:
+            consecutive_epochs_in_p = 0
+        cap_p = cfg.pai.max_consecutive_epochs_in_p_mode
+        if cap_p is not None and consecutive_epochs_in_p >= cap_p:
+            print(
+                f"[PAI] Stopping: max_consecutive_epochs_in_p_mode={cap_p} reached "
+                f"(tracker mode={mv.get('mode')!r}, script epoch={epoch + 1})."
+            )
+            break
 
         wandb.log({
             "train_loss": train_loss_epoch,

@@ -340,13 +340,13 @@ if __name__ == '__main__':
     parser.add_argument('--model_width', type=float, default=1.0)
     parser.add_argument('--head_type', type=str, default="mlp")
     parser.add_argument('--se_dims', type=str, default="c")
-    parser.add_argument('--n_epochs', type=int, default=80,
+    parser.add_argument('--n_epochs', type=int, default=0,
                         help="Hard upper bound on number of training epochs. "
                              "Set to 0 or negative to train until early stopping triggers.")
-    parser.add_argument('--patience', type=int, default=15,
+    parser.add_argument('--patience', type=int, default=75,
                         help="Early stopping patience: stop if validation mAP does "
                              "not improve for this many consecutive epochs.")
-    parser.add_argument('--min_delta', type=float, default=1e-3,
+    parser.add_argument('--min_delta', type=float, default=0,
                         help="Minimum mAP improvement to reset the early-stopping counter.")
     parser.add_argument('--mixup_alpha', type=float, default=0.3)
     parser.add_argument('--no_roll', action='store_true', default=False)
