@@ -15,6 +15,12 @@ Usage:
     cfg = Config(pai_preset="c2na_plus_logit")   # every C2NA + classifier.5
     train(cfg)
 
+    cfg = Config(pai_preset="late_se_block")   # whole ConcurrentSEBlock on late stages
+    train(cfg)
+
+    cfg = Config(pai_preset="classifier2_late_se_block")  # classifier.2 + whole late SE blocks
+    train(cfg)
+
     # or RESUME an existing run's pre-first-switch snapshot with a new
     # dendrite-phase schedule (keeps perforation layout, swaps switch_mode
     # / p_epochs_to_switch):
@@ -48,6 +54,8 @@ PAI_PRESET_CLASSIFIER2_ONLY = "classifier2_only"
 PAI_PRESET_CLASSIFIERS_ONLY = "classifiers_only"
 PAI_PRESET_HEAD_LATE_SE = "head_late_se"
 PAI_PRESET_CLASSIFIER2_LATE_SE = "classifier2_late_se"
+PAI_PRESET_LATE_SE_BLOCK = "late_se_block"
+PAI_PRESET_CLASSIFIER2_LATE_SE_BLOCK = "classifier2_late_se_block"
 
 _HEAD_LATE_SE_MODULE_IDS: Tuple[str, ...] = (
     ".classifier.2",
@@ -66,6 +74,17 @@ _LATE_SE_ONLY_MODULE_IDS: Tuple[str, ...] = tuple(
 ) + tuple(
     f".features.{b}.block.2.conc_se_layers.0.fc2"
     for b in (12, 14, 15)
+)
+
+_LATE_CONCURRENT_SE_BLOCK_IDS: Tuple[str, ...] = tuple(
+    f".features.{b}.block.2" for b in (11, 12, 13, 14, 15)
+)
+
+_EARLY_SE_BLOCK2_TRACK_IDS: Tuple[str, ...] = (
+    ".features.4.block.2",
+    ".features.5.block.2",
+    ".features.6.block.2",
+    ".features.10.block.2",
 )
 
 _PRESET_PAI_PATCHES: Dict[str, dict] = {
@@ -105,6 +124,29 @@ _PRESET_PAI_PATCHES: Dict[str, dict] = {
         "track_module_names": ("Linear",),
         "track_module_ids": (".features.0", ".in_c"),
     },
+    PAI_PRESET_LATE_SE_BLOCK: {
+        "perforate_names_override": ("Linear",),
+        "perforate_module_ids": list(_LATE_CONCURRENT_SE_BLOCK_IDS),
+        "track_module_names": ("Linear",),
+        "track_module_ids": (
+            ".features.0",
+            ".in_c",
+            *_EARLY_SE_BLOCK2_TRACK_IDS,
+        ),
+    },
+    PAI_PRESET_CLASSIFIER2_LATE_SE_BLOCK: {
+        "perforate_names_override": ("Linear",),
+        "perforate_module_ids": [
+            ".classifier.2",
+            *list(_LATE_CONCURRENT_SE_BLOCK_IDS),
+        ],
+        "track_module_names": ("Linear",),
+        "track_module_ids": (
+            ".features.0",
+            ".in_c",
+            *_EARLY_SE_BLOCK2_TRACK_IDS,
+        ),
+    },
 }
 
 # Wandb / save slug fragment when ``experiment_name`` is left empty.
@@ -115,6 +157,8 @@ _PRESET_EXPERIMENT_SUFFIX: Dict[str, str] = {
     PAI_PRESET_CLASSIFIERS_ONLY: "classifiers-only",
     PAI_PRESET_HEAD_LATE_SE: "head-late-se",
     PAI_PRESET_CLASSIFIER2_LATE_SE: "classifier2-late-se",
+    PAI_PRESET_LATE_SE_BLOCK: "late-se-block",
+    PAI_PRESET_CLASSIFIER2_LATE_SE_BLOCK: "classifier2-late-se-block",
 }
 
 
@@ -314,6 +358,13 @@ class PAIConfig:
     #       .conc_se_layers[i] SqueezeExcitation
     #         .fc1             Linear                                  [PERFORATED]
     #         .fc2             Linear                                  [PERFORATED]
+    #   Presets ``late_se_block`` / ``classifier2_late_se_block``: override
+    #   ``("Linear",)`` only; list late ``.features.{11..15}.block.2`` in
+    #   ``perforate_module_ids`` so PAI wraps those whole SE modules by id.
+    #   Earlier SE stages (``.features.{4,5,6,10}.block.2`` on default MN conf)
+    #   are listed in ``track_module_ids`` so they stay tracked, not perforated.
+    #   Never use ``("ConcurrentSEBlock",)`` in the override with a short id
+    #   list only — PAI matches *all* ``ConcurrentSEBlock`` instances by class name.
     #     .block[3]            Conv2dNormActivation   (1x1 project)    [skipped -- Conv2d only]
     #   features[16]           Conv2dNormActivation   (head 80 -> 480) [walker descends -- no Linear inside]
     #   classifier.2           Linear                                  [PERFORATED]
@@ -482,7 +533,7 @@ class Config:
     pai: PAIConfig = field(default_factory=PAIConfig)
     wandb: WandbConfig = field(default_factory=WandbConfig)
     # PAI layout preset: "default"eom ``_PRESET_PAI_PATCHES`` (e.g. ``c2na_plus_logit``).
-    pai_preset: str = PAI_PRESET_CLASSIFIER2_LATE_SE
+    pai_preset: str = PAI_PRESET_CLASSIFIER2_LATE_SE_BLOCK
     experiment_name: str = ""
     cuda: bool = True
 
