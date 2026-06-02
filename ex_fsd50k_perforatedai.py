@@ -57,33 +57,36 @@ from configs.fsd50k_pai_config import (
 os.environ["PAIEMAIL"] = PAI_EMAIL
 os.environ["PAITOKEN"] = PAI_TOKEN
 
-import wandb  
-import numpy as np  
-from tqdm import tqdm  
+import numpy as np
 import torch
+import torch.nn.functional as F
 import torch.multiprocessing as torch_mp
+import wandb
+from sklearn import metrics
+from torch.utils.data import DataLoader
+from torchvision.ops.misc import Conv2dNormActivation
+from tqdm import tqdm
+
 try:
     torch_mp.set_sharing_strategy("file_system")
 except RuntimeError:
     pass
-from torch.utils.data import DataLoader  
-from sklearn import metrics  
-import torch.nn.functional as F  
 
-from datasets.fsd50k import get_valid_set, get_training_set  
-from models.mn.model import get_model as get_mobilenet  
-from models.mn.block_types import InvertedResidual  
-from models.dymn.model import get_model as get_dymn  
-from models.dymn.dy_block import DY_Block  
-from models.preprocess import AugmentMelSTFT  
-from helpers.init import worker_init_fn  
-from helpers.utils import NAME_TO_WIDTH, exp_warmup_linear_down, mixup  
-
-from torchvision.ops.misc import Conv2dNormActivation  
-
-from perforatedai import globals_perforatedai as GPA  
-from perforatedai import utils_perforatedai as UPA  
+from datasets.fsd50k import get_valid_set, get_training_set
+from helpers.init import make_generator, seed_everything, worker_init_fn
+from helpers.utils import NAME_TO_WIDTH, exp_warmup_linear_down, mixup
+from models.dymn.dy_block import DY_Block
+from models.dymn.model import get_model as get_dymn
+from models.mn.block_types import InvertedResidual
+from models.mn.model import get_model as get_mobilenet
+from models.preprocess import AugmentMelSTFT
+from perforatedai import globals_perforatedai as GPA
+from perforatedai import utils_perforatedai as UPA
 import perforatedbp
+
+
+TRAIN_GENERATOR_OFFSET = 0
+VAL_GENERATOR_OFFSET = 1
 
 
 # ----------------------------------------------------------------------------
@@ -514,10 +517,179 @@ def _report_dendrite_targets(model) -> None:
         print(f"  - {m.name:40s}  ({main_type})")
 
 
+def configure_pai(cfg: Config, save_name: str) -> None:
+    _configure_pai(cfg, save_name)
+
+
+def build_mel(cfg: Config, device):
+    pp = cfg.preprocess
+    return AugmentMelSTFT(
+        n_mels=pp.n_mels,
+        sr=pp.resample_rate,
+        win_length=pp.window_size,
+        hopsize=pp.hop_size,
+        n_fft=pp.n_fft,
+        freqm=pp.freqm,
+        timem=pp.timem,
+        fmin=pp.fmin,
+        fmax=pp.fmax,
+        fmin_aug_range=pp.fmin_aug_range,
+        fmax_aug_range=pp.fmax_aug_range,
+    ).to(device)
+
+
+def build_model(cfg: Config):
+    mc = cfg.model
+    model_name = mc.model_name
+    pretrained_name = model_name if mc.pretrained else None
+    width = NAME_TO_WIDTH(model_name) if model_name and mc.pretrained else mc.model_width
+    if model_name.startswith("dymn"):
+        model = get_dymn(
+            width_mult=width,
+            pretrained_name=pretrained_name,
+            pretrain_final_temp=mc.pretrain_final_temp,
+            num_classes=mc.num_classes,
+        )
+    else:
+        model = get_mobilenet(
+            width_mult=width,
+            pretrained_name=pretrained_name,
+            head_type=mc.head_type,
+            se_dims=mc.se_dims,
+            num_classes=mc.num_classes,
+        )
+    return model, width
+
+
+def initialize_pai_model(model, cfg: Config, pai_save_dir: str):
+    configure_pai(cfg, save_name=pai_save_dir)
+    model = _perforate_model(
+        model,
+        save_name=pai_save_dir,
+        maximizing_score=True,  # mAP is higher-is-better.
+    )
+    model = _maybe_resume_from_checkpoint(model, cfg)
+    _report_dendrite_targets(model)
+    _reapply_validation_thresholds(cfg)
+    return model
+
+
+def build_train_loader(cfg: Config):
+    pp = cfg.preprocess
+    dc = cfg.data
+    return DataLoader(
+        dataset=get_training_set(
+            resample_rate=pp.resample_rate,
+            roll=dc.roll,
+            wavmix=dc.wavmix,
+            gain_augment=dc.gain_augment,
+        ),
+        worker_init_fn=worker_init_fn,
+        num_workers=dc.num_workers,
+        batch_size=dc.batch_size,
+        shuffle=True,
+        pin_memory=True,
+        persistent_workers=dc.num_workers > 0,
+        prefetch_factor=dc.prefetch_factor,
+        generator=make_generator(cfg.seed, TRAIN_GENERATOR_OFFSET),
+    )
+
+
+def build_val_loader(cfg: Config):
+    pp = cfg.preprocess
+    dc = cfg.data
+    return DataLoader(
+        dataset=get_valid_set(
+            resample_rate=pp.resample_rate,
+            variable_eval=dc.variable_eval_length,
+        ),
+        worker_init_fn=worker_init_fn,
+        num_workers=dc.num_workers,
+        batch_size=1 if dc.variable_eval_length else dc.batch_size,
+        pin_memory=True,
+        persistent_workers=dc.num_workers > 0,
+        prefetch_factor=dc.prefetch_factor,
+        generator=make_generator(cfg.seed, VAL_GENERATOR_OFFSET),
+    )
+
+
+def _pai_scheduler_args(cfg: Config, register_scheduler: bool = True):
+    oc = cfg.optim
+    lr_lambda = None
+    if oc.scheduler_name == "plateau":
+        if register_scheduler:
+            GPA.pai_tracker.set_scheduler(torch.optim.lr_scheduler.ReduceLROnPlateau)
+        sched_args = {
+            'mode': oc.scheduler_mode,
+            'patience': oc.scheduler_patience,
+            'factor': oc.scheduler_factor,
+            'cooldown': oc.scheduler_cooldown,
+            'min_lr': oc.scheduler_min_lr,
+        }
+    elif oc.scheduler_name == "lambda_warmup":
+        if register_scheduler:
+            GPA.pai_tracker.set_scheduler(torch.optim.lr_scheduler.LambdaLR)
+        # PAI may rebuild this scheduler; the real warmup is applied manually.
+        sched_args = {'lr_lambda': (lambda _e: 1.0)}
+        lr_lambda = exp_warmup_linear_down(
+            oc.warm_up_len,
+            oc.ramp_down_len,
+            oc.ramp_down_start,
+            oc.last_lr_value,
+        )
+    else:
+        raise ValueError(
+            f"Unknown cfg.optim.scheduler_name={oc.scheduler_name!r}; "
+            "expected 'plateau' or 'lambda_warmup'."
+        )
+    return sched_args, lr_lambda
+
+
+def setup_pai_optimizer(model, cfg: Config, register_with_tracker: bool = True):
+    oc = cfg.optim
+    if register_with_tracker:
+        GPA.pai_tracker.set_optimizer(torch.optim.Adam)
+    optim_args = {'params': model.parameters(), 'lr': oc.lr, 'weight_decay': oc.weight_decay}
+    sched_args, lr_lambda = _pai_scheduler_args(
+        cfg,
+        register_scheduler=register_with_tracker,
+    )
+    optimizer, _ = GPA.pai_tracker.setup_optimizer(model, optim_args, sched_args)
+    return optimizer, sched_args, lr_lambda
+
+
+def log_epoch_metrics(train_loss, train_mAP, train_ROC, mAP, ROC, val_loss, learning_rate):
+    wandb.log({
+        "train_loss": train_loss,
+        "train_mAP": train_mAP,
+        "train_ROC": train_ROC,
+        "mAP": mAP,
+        "ROC": ROC,
+        "val_loss": val_loss,
+        "learning_rate": learning_rate,
+    })
+
+
+def save_rolling_checkpoint(model, name, width, epoch, mAP):
+    if name is not None:
+        try:
+            os.remove(os.path.join(wandb.run.dir, name))
+        except FileNotFoundError:
+            pass
+    name = (
+        f"mn{str(width).replace('.', '')}_fsd50k_pai_"
+        f"epoch_{epoch}_mAP_{int(round(mAP * 1000))}.pt"
+    )
+    torch.save(model.state_dict(), os.path.join(wandb.run.dir, name))
+    return name
+
+
 # ----------------------------------------------------------------------------
 # Training
 # ----------------------------------------------------------------------------
 def train(cfg: Config = default_config):
+    seed_everything(cfg.seed)
+
     pai_save_dir = os.path.join("pai", cfg.experiment_name)
     os.makedirs(pai_save_dir, exist_ok=True)
     os.makedirs(os.path.join(pai_save_dir, "pai"), exist_ok=True)
@@ -538,50 +710,9 @@ def train(cfg: Config = default_config):
     amp_enabled = bool(not cfg.pai.perforated_bp and cfg.cuda and device.type == "cuda")
     scaler = torch.amp.GradScaler(device.type, enabled=amp_enabled)
 
-    pp = cfg.preprocess
-    mel = AugmentMelSTFT(
-        n_mels=pp.n_mels, sr=pp.resample_rate,
-        win_length=pp.window_size, hopsize=pp.hop_size, n_fft=pp.n_fft,
-        freqm=pp.freqm, timem=pp.timem,
-        fmin=pp.fmin, fmax=pp.fmax,
-        fmin_aug_range=pp.fmin_aug_range, fmax_aug_range=pp.fmax_aug_range,
-    ).to(device)
-
-    # ---------------- Build the (un-perforated) model first ---------------
-    mc = cfg.model
-    model_name = mc.model_name
-    pretrained_name = model_name if mc.pretrained else None
-    width = NAME_TO_WIDTH(model_name) if model_name and mc.pretrained else mc.model_width
-    if model_name.startswith("dymn"):
-        model = get_dymn(
-            width_mult=width,
-            pretrained_name=pretrained_name,
-            pretrain_final_temp=mc.pretrain_final_temp,
-            num_classes=mc.num_classes,
-        )
-    else:
-        model = get_mobilenet(
-            width_mult=width,
-            pretrained_name=pretrained_name,
-            head_type=mc.head_type,
-            se_dims=mc.se_dims,
-            num_classes=mc.num_classes,
-        )
-
-    # ---------------- Configure PAI, THEN perforate the model --------------
-    _configure_pai(cfg, save_name=pai_save_dir)
-    model = _perforate_model(
-        model,
-        save_name=pai_save_dir,
-        maximizing_score=True,  # mAP is "higher is better"
-    )
-    # Optionally pour a prior run's pre-first-switch weights (+ tracker
-    # state) onto the freshly-perforated model. Most ``GPA.pc`` fields from
-    # ``_configure_pai`` persist across ``load_system``; running_average_pb
-    # and improvement thresholds are reasserted below after resume.
-    model = _maybe_resume_from_checkpoint(model, cfg)
-    _report_dendrite_targets(model)
-    _reapply_validation_thresholds(cfg)
+    mel = build_mel(cfg, device)
+    model, width = build_model(cfg)
+    model = initialize_pai_model(model, cfg, pai_save_dir)
 
     # Optional full post-perforation module tree: lets the user visually
     # confirm which blocks became `PAINeuronModule` / `TrackedNeuronModule`
@@ -597,36 +728,8 @@ def train(cfg: Config = default_config):
     print(f"param_count: {total_params}")
     print(f"trainable_param_count: {trainable_params}")
 
-    # ---------------- Data loaders -----------------------------------------
-    dc = cfg.data
-    dl = DataLoader(
-        dataset=get_training_set(
-            resample_rate=pp.resample_rate,
-            roll=dc.roll,
-            wavmix=dc.wavmix,
-            gain_augment=dc.gain_augment,
-        ),
-        worker_init_fn=worker_init_fn,
-        num_workers=dc.num_workers,
-        batch_size=dc.batch_size,
-        shuffle=True,
-        pin_memory=True,
-        persistent_workers=dc.num_workers > 0,
-        prefetch_factor=dc.prefetch_factor,
-    )
-
-    valid_dl = DataLoader(
-        dataset=get_valid_set(
-            resample_rate=pp.resample_rate,
-            variable_eval=dc.variable_eval_length,
-        ),
-        worker_init_fn=worker_init_fn,
-        num_workers=dc.num_workers,
-        batch_size=1 if dc.variable_eval_length else dc.batch_size,
-        pin_memory=True,
-        persistent_workers=dc.num_workers > 0,
-        prefetch_factor=dc.prefetch_factor,
-    )
+    dl = build_train_loader(cfg)
+    valid_dl = build_val_loader(cfg)
 
     # ---------------- PAI-managed optimizer + scheduler --------------------
     # Two supported schedules (selected via cfg.optim.scheduler_name):
@@ -649,38 +752,7 @@ def train(cfg: Config = default_config):
     #                      pass a metric value to a non-plateau scheduler
     #                      class.
     oc = cfg.optim
-    GPA.pai_tracker.set_optimizer(torch.optim.Adam)
-    optim_args = {'params': model.parameters(), 'lr': oc.lr, 'weight_decay': oc.weight_decay}
-
-    lr_lambda = None  # populated below for the "lambda_warmup" branch
-
-    if oc.scheduler_name == "plateau":
-        GPA.pai_tracker.set_scheduler(torch.optim.lr_scheduler.ReduceLROnPlateau)
-        sched_args = {
-            'mode': oc.scheduler_mode,
-            'patience': oc.scheduler_patience,
-            'factor': oc.scheduler_factor,
-            'cooldown': oc.scheduler_cooldown,
-            'min_lr': oc.scheduler_min_lr,
-        }
-    elif oc.scheduler_name == "lambda_warmup":
-        GPA.pai_tracker.set_scheduler(torch.optim.lr_scheduler.LambdaLR)
-        # No-op LambdaLR so PAI's rebuild path is safe; real schedule is
-        # applied manually to param_groups at the top of each epoch.
-        sched_args = {'lr_lambda': (lambda _e: 1.0)}
-        lr_lambda = exp_warmup_linear_down(
-            oc.warm_up_len,
-            oc.ramp_down_len,
-            oc.ramp_down_start,
-            oc.last_lr_value,
-        )
-    else:
-        raise ValueError(
-            f"Unknown cfg.optim.scheduler_name={oc.scheduler_name!r}; "
-            "expected 'plateau' or 'lambda_warmup'."
-        )
-
-    optimizer, _ = GPA.pai_tracker.setup_optimizer(model, optim_args, sched_args)
+    optimizer, _, lr_lambda = setup_pai_optimizer(model, cfg)
 
     # ---------------- Training loop ----------------------------------------
     name = None
@@ -811,26 +883,16 @@ def train(cfg: Config = default_config):
             )
             break
 
-        wandb.log({
-            "train_loss": train_loss_epoch,
-            "train_mAP": train_mAP,
-            "train_ROC": train_ROC,
-            "mAP": mAP,
-            "ROC": ROC,
-            "val_loss": val_loss,
-            "learning_rate": optimizer.param_groups[0]["lr"],
-        })
-
-        if name is not None:
-            try:
-                os.remove(os.path.join(wandb.run.dir, name))
-            except FileNotFoundError:
-                pass
-        name = (
-            f"mn{str(width).replace('.', '')}_fsd50k_pai_"
-            f"epoch_{epoch}_mAP_{int(round(mAP * 1000))}.pt"
+        log_epoch_metrics(
+            train_loss_epoch,
+            train_mAP,
+            train_ROC,
+            mAP,
+            ROC,
+            val_loss,
+            optimizer.param_groups[0]["lr"],
         )
-        torch.save(model.state_dict(), os.path.join(wandb.run.dir, name))
+        name = save_rolling_checkpoint(model, name, width, epoch, mAP)
 
         if training_complete:
             print(
@@ -843,18 +905,7 @@ def train(cfg: Config = default_config):
         elif restructured:
             # Topology changed: optimizer state is stale, rebuild with the
             # same scheduler family we configured at startup.
-            optim_args = {'params': model.parameters(), 'lr': oc.lr, 'weight_decay': oc.weight_decay}
-            if oc.scheduler_name == "plateau":
-                sched_args = {
-                    'mode': oc.scheduler_mode,
-                    'patience': oc.scheduler_patience,
-                    'factor': oc.scheduler_factor,
-                    'cooldown': oc.scheduler_cooldown,
-                    'min_lr': oc.scheduler_min_lr,
-                }
-            else:  # "lambda_warmup"
-                sched_args = {'lr_lambda': (lambda _e: 1.0)}
-            optimizer, _ = GPA.pai_tracker.setup_optimizer(model, optim_args, sched_args)
+            optimizer, _, _ = setup_pai_optimizer(model, cfg, register_with_tracker=False)
             scaler = torch.amp.GradScaler(device.type, enabled=amp_enabled)
             # Fresh PAI cycle on a new architecture: restart the warmup+
             # rampdown curve from 0 so the new (larger) model gets the same

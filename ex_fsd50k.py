@@ -1,25 +1,135 @@
-import wandb
-import numpy as np
-import os
-from tqdm import tqdm
-import torch
-from torch.utils.data import DataLoader
 import argparse
-from sklearn import metrics
+import os
+
+import numpy as np
+import torch
 import torch.nn.functional as F
+import wandb
+from sklearn import metrics
+from torch.utils.data import DataLoader
+from tqdm import tqdm
 
 from datasets.fsd50k import get_eval_set, get_valid_set, get_training_set
-from models.mn.model import get_model as get_mobilenet
-from models.dymn.model import get_model as get_dymn
-from models.preprocess import AugmentMelSTFT
-from helpers.init import worker_init_fn
+from helpers.init import make_generator, seed_everything, worker_init_fn
 from helpers.utils import NAME_TO_WIDTH, exp_warmup_linear_down, mixup
+from models.dymn.model import get_model as get_dymn
+from models.mn.model import get_model as get_mobilenet
+from models.preprocess import AugmentMelSTFT
+
+
+NUM_CLASSES = 200
+TRAIN_GENERATOR_OFFSET = 0
+VAL_GENERATOR_OFFSET = 1
+EVAL_GENERATOR_OFFSET = 2
+
+
+def build_mel(args, device):
+    mel = AugmentMelSTFT(
+        n_mels=args.n_mels,
+        sr=args.resample_rate,
+        win_length=args.window_size,
+        hopsize=args.hop_size,
+        n_fft=args.n_fft,
+        freqm=args.freqm,
+        timem=args.timem,
+        fmin=args.fmin,
+        fmax=args.fmax,
+        fmin_aug_range=args.fmin_aug_range,
+        fmax_aug_range=args.fmax_aug_range,
+    )
+    mel.to(device)
+    return mel
+
+
+def build_model(args, device, pretrained_name=None):
+    model_name = args.model_name
+    if pretrained_name is None and args.pretrained:
+        pretrained_name = model_name
+    width = NAME_TO_WIDTH(model_name) if model_name and pretrained_name else args.model_width
+    if model_name.startswith("dymn"):
+        model = get_dymn(
+            width_mult=width,
+            pretrained_name=pretrained_name,
+            pretrain_final_temp=args.pretrain_final_temp,
+            num_classes=NUM_CLASSES,
+        )
+    else:
+        model = get_mobilenet(
+            width_mult=width,
+            pretrained_name=pretrained_name,
+            head_type=args.head_type,
+            se_dims=args.se_dims,
+            num_classes=NUM_CLASSES,
+        )
+    model.to(device)
+    return model, width
+
+
+def build_train_loader(args):
+    return DataLoader(
+        dataset=get_training_set(
+            resample_rate=args.resample_rate,
+            roll=False if args.no_roll else True,
+            wavmix=False if args.no_wavmix else True,
+            gain_augment=args.gain_augment,
+        ),
+        worker_init_fn=worker_init_fn,
+        num_workers=args.num_workers,
+        batch_size=args.batch_size,
+        shuffle=True,
+        generator=make_generator(args.seed, TRAIN_GENERATOR_OFFSET),
+    )
+
+
+def build_val_loader(args):
+    return DataLoader(
+        dataset=get_valid_set(
+            resample_rate=args.resample_rate,
+            variable_eval=args.variable_eval_length,
+        ),
+        worker_init_fn=worker_init_fn,
+        num_workers=args.num_workers,
+        batch_size=1 if args.variable_eval_length else args.batch_size,
+        generator=make_generator(args.seed, VAL_GENERATOR_OFFSET),
+    )
+
+
+def build_eval_loader(args):
+    return DataLoader(
+        dataset=get_eval_set(
+            resample_rate=args.resample_rate,
+            variable_eval=args.variable_eval_length,
+        ),
+        worker_init_fn=worker_init_fn,
+        num_workers=args.num_workers,
+        batch_size=1 if args.variable_eval_length else args.batch_size,
+        generator=make_generator(args.seed, EVAL_GENERATOR_OFFSET),
+    )
+
+
+def log_epoch_metrics(train_loss, train_mAP, train_ROC, lr_now, mAP, ROC, val_loss):
+    wandb.log({
+        "train_loss": train_loss,
+        "train_mAP": train_mAP,
+        "train_ROC": train_ROC,
+        "learning_rate": lr_now,
+        "mAP": mAP,
+        "ROC": ROC,
+        "val_loss": val_loss,
+    })
+
+
+def save_checkpoint_if_best(model, improved):
+    latest_path = os.path.join(wandb.run.dir, "latest.pt")
+    torch.save(model.state_dict(), latest_path)
+    if improved:
+        best_ckpt = os.path.join(wandb.run.dir, "best_val_mAP.pt")
+        torch.save(model.state_dict(), best_ckpt)
 
 
 def train(args):
-    # Train Models on FSD50K
+    seed_everything(args.seed)
 
-    # logging is done using wandb
     wandb.init(
         entity="11-785_perforated_ai",
         project="FSD50K",
@@ -32,83 +142,75 @@ def train(args):
 
     device = torch.device('cuda') if args.cuda and torch.cuda.is_available() else torch.device('cpu')
 
-    # model to preprocess waveform into mel spectrograms
-    mel = AugmentMelSTFT(n_mels=args.n_mels,
-                         sr=args.resample_rate,
-                         win_length=args.window_size,
-                         hopsize=args.hop_size,
-                         n_fft=args.n_fft,
-                         freqm=args.freqm,
-                         timem=args.timem,
-                         fmin=args.fmin,
-                         fmax=args.fmax,
-                         fmin_aug_range=args.fmin_aug_range,
-                         fmax_aug_range=args.fmax_aug_range
-                         )
-    mel.to(device)
+    mel = build_mel(args, device)
+    model, _ = build_model(args, device)
+    dl = build_train_loader(args)
+    valid_dl = build_val_loader(args)
 
-    # load prediction model
-    model_name = args.model_name
-    pretrained_name = model_name if args.pretrained else None
-    width = NAME_TO_WIDTH(model_name) if model_name and args.pretrained else args.model_width
-    if model_name.startswith("dymn"):
-        model = get_dymn(width_mult=width, pretrained_name=pretrained_name,
-                         pretrain_final_temp=args.pretrain_final_temp,
-                         num_classes=200)
+    # optimizer & scheduler (aligned with ex_fsd50k_perforatedai.py / OptimConfig)
+    optimizer = torch.optim.Adam(
+        model.parameters(), lr=args.lr, weight_decay=args.weight_decay
+    )
+    lr_lambda = None
+    scheduler = None
+    if args.scheduler_name == "plateau":
+        scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
+            optimizer,
+            mode=args.scheduler_mode,
+            patience=args.scheduler_patience,
+            factor=args.scheduler_factor,
+            cooldown=args.scheduler_cooldown,
+            min_lr=args.scheduler_min_lr,
+        )
+    elif args.scheduler_name == "lambda_warmup":
+        lr_lambda = exp_warmup_linear_down(
+            args.warm_up_len,
+            args.ramp_down_len,
+            args.ramp_down_start,
+            args.last_lr_value,
+        )
     else:
-        model = get_mobilenet(width_mult=width, pretrained_name=pretrained_name,
-                              head_type=args.head_type, se_dims=args.se_dims,
-                              num_classes=200)
-    model.to(device)
+        raise ValueError(
+            f"Unknown --scheduler_name={args.scheduler_name!r}; "
+            "expected 'plateau' or 'lambda_warmup'."
+        )
 
-    # dataloader
-    dl = DataLoader(dataset=get_training_set(resample_rate=args.resample_rate,
-                                             roll=False if args.no_roll else True,
-                                             wavmix=False if args.no_wavmix else True,
-                                             gain_augment=args.gain_augment),
-                    worker_init_fn=worker_init_fn,
-                    num_workers=args.num_workers,
-                    batch_size=args.batch_size,
-                    shuffle=True)
-
-    # evaluation loader
-    valid_dl = DataLoader(dataset=get_valid_set(resample_rate=args.resample_rate,
-                                                variable_eval=args.variable_eval_length),
-                          worker_init_fn=worker_init_fn,
-                          num_workers=args.num_workers,
-                          batch_size=1 if args.variable_eval_length else args.batch_size)
-
-    # optimizer & scheduler
-    optimizer = torch.optim.Adam(model.parameters(), lr=args.lr, weight_decay=args.weight_decay)
-    # phases of lr schedule: exponential increase, constant lr, linear decrease, fine-tune
-    schedule_lambda = \
-        exp_warmup_linear_down(args.warm_up_len, args.ramp_down_len, args.ramp_down_start, args.last_lr_value)
-    scheduler = torch.optim.lr_scheduler.LambdaLR(optimizer, schedule_lambda)
-
-    name = None
-    best_name = None
     mAP, ROC, val_loss = float('NaN'), float('NaN'), float('NaN')
 
-    # Early stopping state: stop when validation mAP has not improved
-    # for `args.patience` consecutive epochs.
+    # Early stopping on validation mAP (after min_epochs).
     best_mAP = float('-inf')
     best_epoch = -1
     epochs_since_improvement = 0
 
-    # `args.n_epochs` acts as a hard upper bound; set to <= 0 to train
-    # until early stopping triggers.
     max_epochs = args.n_epochs if args.n_epochs and args.n_epochs > 0 else int(1e9)
+    schedule_epoch = 0  # drives lambda_warmup when lambda_warmup_per_cycle is True
 
     epoch = 0
     while epoch < max_epochs:
+        # Manual LR for lambda_warmup (epoch-start, same order as perforated script).
+        if lr_lambda is not None:
+            sched_idx = schedule_epoch if args.lambda_warmup_per_cycle else epoch
+            scale = float(lr_lambda(sched_idx))
+            for pg in optimizer.param_groups:
+                pg["lr"] = args.lr * scale
+            schedule_epoch += 1
+
         mel.train()
         model.train()
         train_stats = dict(train_loss=list())
         train_targets, train_outputs = [], []
         pbar = tqdm(dl)
-        pbar.set_description("Epoch {} (best mAP: {:.4f} @ ep {}, no-improve: {}/{})"
-                             .format(epoch + 1, best_mAP if best_mAP > float('-inf') else 0.0,
-                                     best_epoch + 1, epochs_since_improvement, args.patience))
+        pbar.set_description(
+            "Epoch {} (best val mAP: {:.4f} @ ep {}, no-improve: {}/{}; min_ep {})"
+            .format(
+                epoch + 1,
+                best_mAP if best_mAP > float("-inf") else 0.0,
+                best_epoch + 1,
+                epochs_since_improvement,
+                args.patience,
+                args.min_epochs,
+            )
+        )
         for batch in pbar:
             x, f, y = batch
             bs = x.size(0)
@@ -124,35 +226,28 @@ def train(args):
                 y_mix = y * lam.reshape(bs, 1) + y[rn_indices] * (1. - lam.reshape(bs, 1))
                 samples_loss = F.binary_cross_entropy_with_logits(y_hat, y_mix, reduction="none")
             else:
-                y_hat , _= model(x)
+                y_hat, _ = model(x)
                 samples_loss = F.binary_cross_entropy_with_logits(y_hat, y, reduction="none")
 
-            # loss
             loss = samples_loss.mean()
 
-            # append training statistics
             train_stats['train_loss'].append(loss.detach().cpu().numpy())
 
-            # Accumulate predictions vs. ORIGINAL (pre-mixup) targets for
-            # an on-the-fly training mAP/ROC. Predictions reflect the
-            # current (still-updating) model; treat this as a noisy
-            # upper-bound proxy for "did the model memorize / fit the
-            # training distribution?".
+            # This is a noisy in-epoch fit proxy because weights change between batches.
             train_targets.append(y.detach().cpu().numpy())
             train_outputs.append(y_hat.detach().float().cpu().numpy())
 
-            # Update Model
             loss.backward()
             optimizer.step()
             optimizer.zero_grad()
-        # Update learning rate
-        scheduler.step()
 
-        # compute training-set mAP/ROC from the accumulated batches
         train_mAP, train_ROC = _score(train_targets, train_outputs)
-
-        # evaluate
         mAP, ROC, val_loss = _test(model, mel, valid_dl, device)
+
+        if scheduler is not None:
+            scheduler.step(mAP)
+
+        lr_now = optimizer.param_groups[0]["lr"]
 
         # Early-stopping bookkeeping based on validation mAP.
         improved = mAP > best_mAP + args.min_delta
@@ -163,44 +258,39 @@ def train(args):
         else:
             epochs_since_improvement += 1
 
-        # log train and validation statistics
-        wandb.log({"train_loss": np.mean(train_stats['train_loss']),
-                   "train_mAP": train_mAP,
-                   "train_ROC": train_ROC,
-                   "learning_rate": scheduler.get_last_lr()[0],
-                   "mAP": mAP,
-                   "ROC": ROC,
-                   "val_loss": val_loss,
-                   })
+        log_epoch_metrics(
+            np.mean(train_stats['train_loss']),
+            train_mAP,
+            train_ROC,
+            lr_now,
+            mAP,
+            ROC,
+            val_loss,
+        )
+        save_checkpoint_if_best(model, improved)
 
-        # remove previous model (we try to not flood your hard disk) and save latest model
-        if name is not None and name != best_name:
-            prev_path = os.path.join(wandb.run.dir, name)
-            if os.path.exists(prev_path):
-                os.remove(prev_path)
-        name = f"mn{str(width).replace('.', '')}_fsd50k_epoch_{epoch}_mAP_{int(round(mAP*1000))}.pt"
-        torch.save(model.state_dict(), os.path.join(wandb.run.dir, name))
-
-        # Always keep the best checkpoint on disk alongside the latest.
-        if improved:
-            if best_name is not None and best_name != name:
-                prev_best_path = os.path.join(wandb.run.dir, best_name)
-                if os.path.exists(prev_best_path):
-                    os.remove(prev_best_path)
-            best_name = name
-
-        # Early-stopping trigger.
-        if epochs_since_improvement >= args.patience:
-            print(f"Early stopping at epoch {epoch + 1}: validation mAP has not "
-                  f"improved for {args.patience} epochs "
-                  f"(best mAP {best_mAP:.4f} at epoch {best_epoch + 1}).")
+        # Early-stopping: only after min_epochs; metric = validation mAP.
+        if (
+            (epoch + 1) >= args.min_epochs
+            and epochs_since_improvement >= args.patience
+        ):
+            print(
+                f"Early stopping at epoch {epoch + 1}: validation mAP has not "
+                f"improved for {args.patience} epochs (min_epochs={args.min_epochs}; "
+                f"best val mAP {best_mAP:.4f} at epoch {best_epoch + 1})."
+            )
             break
 
         epoch += 1
 
-    wandb.run.summary["best_mAP"] = best_mAP
+    wandb.run.summary["best_val_mAP"] = best_mAP
+    wandb.run.summary["best_mAP"] = best_mAP  # alias for older dashboards
     wandb.run.summary["best_epoch"] = best_epoch + 1
-    wandb.run.summary["stopped_epoch"] = epoch + 1
+    # After a normal max-epochs finish, ``epoch`` has been incremented to
+    # ``max_epochs``; after early stopping it is the last completed 0-based index.
+    wandb.run.summary["stopped_epoch"] = (
+        epoch if epoch >= max_epochs else epoch + 1
+    )
 
 
 def _mel_forward(x, mel):
@@ -257,44 +347,18 @@ def _test(model, mel, eval_loader, device):
 
 
 def evaluate(args):
+    seed_everything(args.seed)
+
     model_name = args.model_name
     device = torch.device('cuda') if args.cuda and torch.cuda.is_available() else torch.device('cpu')
 
-    # load pre-trained model
-    model_name = args.model_name
-    width = NAME_TO_WIDTH(model_name)
-    if model_name.startswith("dymn"):
-        model = get_dymn(width_mult=width, pretrained_name=model_name,
-                         pretrain_final_temp=args.pretrain_final_temp,
-                         num_classes=200)
-    else:
-        model = get_mobilenet(width_mult=width, pretrained_name=model_name,
-                              head_type=args.head_type, se_dims=args.se_dims,
-                              num_classes=200)
-    model.to(device)
+    model, _ = build_model(args, device, pretrained_name=model_name)
     model.eval()
 
-    # model to preprocess waveform into mel spectrograms
-    mel = AugmentMelSTFT(n_mels=args.n_mels,
-                         sr=args.resample_rate,
-                         win_length=args.window_size,
-                         hopsize=args.hop_size,
-                         n_fft=args.n_fft,
-                         freqm=args.freqm,
-                         timem=args.timem,
-                         fmin=args.fmin,
-                         fmax=args.fmax,
-                         fmin_aug_range=args.fmin_aug_range,
-                         fmax_aug_range=args.fmax_aug_range
-                         )
-    mel.to(device)
+    mel = build_mel(args, device)
     mel.eval()
 
-    dl = DataLoader(dataset=get_eval_set(resample_rate=args.resample_rate,
-                                         variable_eval=args.variable_eval_length),
-                    worker_init_fn=worker_init_fn,
-                    num_workers=args.num_workers,
-                    batch_size=1 if args.variable_eval_length else args.batch_size)
+    dl = build_eval_loader(args)
 
     print(f"Running FSD50K evaluation for model '{model_name}' on device '{device}'")
     targets = []
@@ -323,11 +387,12 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Example of parser. ')
 
     # general
-    parser.add_argument('--experiment_name', type=str, default="FSD50K")
+    parser.add_argument('--experiment_name', type=str, default="FSD50K-mn05_as-baseline")
     parser.add_argument('--train', action='store_true', default=False)
     parser.add_argument('--cuda', action='store_true', default=False)
     parser.add_argument('--batch_size', type=int, default=64)
     parser.add_argument('--num_workers', type=int, default=12)
+    parser.add_argument('--seed', type=int, default=0)
 
     # validation & evaluation
     # if true, requires setting validation and evaluation batch size to 1
@@ -335,29 +400,49 @@ if __name__ == '__main__':
 
     # training
     parser.add_argument('--pretrained', action='store_true', default=False)
-    parser.add_argument('--model_name', type=str, default="mn10_as")
+    parser.add_argument('--model_name', type=str, default="mn05_as")
     parser.add_argument('--pretrain_final_temp', type=float, default=1.0)  # for DyMN
     parser.add_argument('--model_width', type=float, default=1.0)
     parser.add_argument('--head_type', type=str, default="mlp")
     parser.add_argument('--se_dims', type=str, default="c")
-    parser.add_argument('--n_epochs', type=int, default=0,
-                        help="Hard upper bound on number of training epochs. "
-                             "Set to 0 or negative to train until early stopping triggers.")
-    parser.add_argument('--patience', type=int, default=75,
-                        help="Early stopping patience: stop if validation mAP does "
-                             "not improve for this many consecutive epochs.")
+    parser.add_argument('--n_epochs', type=int, default=200,
+                        help="Hard upper bound on training epochs (baseline default 200). "
+                             "Set to 0 or negative to train until early stopping only.")
+    parser.add_argument('--min_epochs', type=int, default=25,
+                        help="Minimum epochs before early stopping can trigger (baseline 25).")
+    parser.add_argument('--patience', type=int, default=25,
+                        help="Early stopping patience on validation mAP: stop after this "
+                             "many consecutive epochs without improvement (after min_epochs).")
     parser.add_argument('--min_delta', type=float, default=0,
                         help="Minimum mAP improvement to reset the early-stopping counter.")
     parser.add_argument('--mixup_alpha', type=float, default=0.3)
     parser.add_argument('--no_roll', action='store_true', default=False)
     parser.add_argument('--no_wavmix', action='store_true', default=False)
     parser.add_argument('--gain_augment', type=int, default=12)
-    parser.add_argument('--weight_decay', type=int, default=0.0)
-    # lr schedule
+    parser.add_argument('--weight_decay', type=float, default=0.0)
     parser.add_argument('--lr', type=float, default=7e-5)
-    parser.add_argument('--warm_up_len', type=int, default=10)
+    parser.add_argument(
+        '--scheduler_name',
+        type=str,
+        default='plateau',
+        choices=('plateau', 'lambda_warmup'),
+        help="plateau: ReduceLROnPlateau stepped on val mAP; "
+        "lambda_warmup: exp warmup + linear rampdown applied each epoch.",
+    )
+    parser.add_argument('--scheduler_mode', type=str, default='max')
+    parser.add_argument('--scheduler_patience', type=int, default=5)
+    parser.add_argument('--scheduler_factor', type=float, default=0.5)
+    parser.add_argument('--scheduler_cooldown', type=int, default=3)
+    parser.add_argument('--scheduler_min_lr', type=float, default=1e-7)
+    parser.add_argument(
+        '--lambda_warmup_per_cycle',
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help="For lambda_warmup: use a per-run schedule counter (same as single PAI cycle).",
+    )
+    parser.add_argument('--warm_up_len', type=int, default=3)
     parser.add_argument('--ramp_down_start', type=int, default=10)
-    parser.add_argument('--ramp_down_len', type=int, default=65)
+    parser.add_argument('--ramp_down_len', type=int, default=25)
     parser.add_argument('--last_lr_value', type=float, default=0.01)
 
     # preprocessing
