@@ -371,7 +371,7 @@ class DataConfig:
     variable_eval_length: bool = False  # True => val/eval batch_size forced to 1
     # DataLoader
     batch_size: int = 64
-    num_workers: int = 8
+    num_workers: int = 5
     prefetch_factor: int = None
 
 
