@@ -1,0 +1,10 @@
+[
+    {
+      "save_name": "FSD50K-mn04-pai-probe-late-s0",
+      "type": "pai",
+      "args": [
+        "--model", "mn04_as",
+        "--preset", "logit_only"
+      ]
+    }
+  ]
