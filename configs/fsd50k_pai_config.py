@@ -243,6 +243,11 @@ def _normalize_pai_preset(preset: str) -> str:
     return _PRESET_ALIASES.get(key, key)
 
 
+def get_pai_preset_names() -> Tuple[Tuple[str, ...], Dict[str, str]]:
+    """Return canonical preset names and legacy aliases for CLI display."""
+    return tuple(sorted(_PRESET_PAI_PATCHES)), dict(sorted(_PRESET_ALIASES.items()))
+
+
 def _apply_pai_preset(cfg: "Config") -> None:
     """Merge preset-specific ``PAIConfig`` fields onto ``cfg.pai``."""
     key = _normalize_pai_preset(cfg.pai_preset)
@@ -256,6 +261,69 @@ def _apply_pai_preset(cfg: "Config") -> None:
             f"Unknown Config.pai_preset={key!r}. Valid choices: {choices}"
         )
     cfg.pai = replace(cfg.pai, **patches)
+
+
+def _preset_suffix(pai_preset: str) -> str:
+    return _PRESET_EXPERIMENT_SUFFIX.get(
+        pai_preset,
+        pai_preset.replace("_", "-"),
+    )
+
+
+def _derive_run_identity(cfg: "Config", force: bool = False) -> None:
+    if force:
+        cfg.experiment_name = ""
+        cfg.wandb.name = ""
+        cfg.wandb.group = ""
+        cfg.wandb.notes = ""
+
+    if not cfg.experiment_name:
+        if cfg.pai_preset != PAI_PRESET_DEFAULT:
+            cfg.experiment_name = (
+                f"FSD50K-{cfg.model.model_name}-pai-"
+                f"{cfg.pai.switch_mode}-{_preset_suffix(cfg.pai_preset)}"
+            )
+        else:
+            cfg.experiment_name = (
+                f"FSD50K-{cfg.model.model_name}-pai-{cfg.pai.switch_mode}"
+            )
+
+    slug = cfg.experiment_name
+    if not cfg.wandb.name:
+        cfg.wandb.name = slug
+    if not cfg.wandb.group:
+        cfg.wandb.group = slug
+    if not cfg.wandb.notes:
+        cfg.wandb.notes = (
+            f"Fine-tune {cfg.model.model_name} on FSD50K with Perforated AI Dendrites."
+        )
+
+
+def apply_runtime_overrides(
+    cfg: "Config",
+    model_name: Optional[str] = None,
+    pai_preset: Optional[str] = None,
+) -> "Config":
+    """Apply CLI overrides on top of a config object and refresh run names."""
+    if model_name:
+        cfg.model = replace(cfg.model, model_name=model_name)
+
+    if pai_preset:
+        defaults = PAIConfig()
+        cfg.pai = replace(
+            cfg.pai,
+            perforate_names_override=defaults.perforate_names_override,
+            perforate_module_ids=defaults.perforate_module_ids,
+            track_module_names=defaults.track_module_names,
+            track_module_ids=defaults.track_module_ids,
+        )
+        cfg.pai_preset = _normalize_pai_preset(pai_preset)
+        _apply_pai_preset(cfg)
+
+    if model_name or pai_preset:
+        _derive_run_identity(cfg, force=True)
+
+    return cfg
 
 
 # ============================================================================
@@ -624,31 +692,8 @@ class Config:
 
     def __post_init__(self) -> None:
         _apply_pai_preset(self)
-        # Derive run slug + wandb metadata from model + pai unless caller
-        # supplied explicit overrides. This keeps `Config()` zero-arg usable
-        # while still letting power users pin any field.
-        if not self.experiment_name:
-            if self.pai_preset != PAI_PRESET_DEFAULT:
-                suffix = _PRESET_EXPERIMENT_SUFFIX.get(
-                    self.pai_preset,
-                    self.pai_preset.replace("_", "-"),
-                )
-                self.experiment_name = (
-                    f"FSD50K-{self.model.model_name}-pai-{self.pai.switch_mode}-{suffix}"
-                )
-            else:
-                self.experiment_name = (
-                    f"FSD50K-{self.model.model_name}-pai-{self.pai.switch_mode}"
-                )
-        slug = self.experiment_name
-        if not self.wandb.name:
-            self.wandb.name = slug
-        if not self.wandb.group:
-            self.wandb.group = slug
-        if not self.wandb.notes:
-            self.wandb.notes = (
-                f"Fine-tune {self.model.model_name} on FSD50K with Perforated AI Dendrites."
-            )
+        # Keep explicit config-file names unless a runtime override asks to refresh them.
+        _derive_run_identity(self)
 
 
 # Default instance consumed by the training script. Switch PAI layout here,

@@ -42,14 +42,35 @@ tensor dendrite machinery silently drops `g`. We fix this with
 
 PAI reference: https://www.perforatedai.com/docs
 """
+import argparse
+import copy
 import os
+import sys
 
 from configs.fsd50k_pai_config import (
     Config,
     PAI_EMAIL,
     PAI_TOKEN,
+    apply_runtime_overrides,
     config as default_config,
+    get_pai_preset_names,
 )
+
+
+def _print_available_presets() -> None:
+    canonical, aliases = get_pai_preset_names()
+    print("Canonical PAI presets:")
+    for name in canonical:
+        print(f"  {name}")
+    if aliases:
+        print("\nLegacy aliases:")
+        for old, new in aliases.items():
+            print(f"  {old} -> {new}")
+
+
+if __name__ == "__main__" and "--list-presets" in sys.argv:
+    _print_available_presets()
+    sys.exit(0)
 
 # ============================================================================
 # Perforated AI license credentials -- must be set BEFORE importing perforatedai
@@ -979,5 +1000,50 @@ def _config_as_dict(cfg: Config) -> dict:
     return asdict(cfg)
 
 
+def build_arg_parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(
+        description="Fine-tune FSD50K with Perforated AI using config defaults.",
+    )
+    parser.add_argument(
+        "--model",
+        "-model",
+        dest="model_name",
+        default=None,
+        help="Override cfg.model.model_name, e.g. mn10_as or dymn04_as.",
+    )
+    parser.add_argument(
+        "--preset",
+        "-preset",
+        dest="pai_preset",
+        default=None,
+        help="Override cfg.pai_preset. Use --list-presets to see valid names.",
+    )
+    parser.add_argument(
+        "--list-presets",
+        action="store_true",
+        help="Print canonical PAI presets and legacy aliases, then exit.",
+    )
+    return parser
+
+
+def main() -> None:
+    parser = build_arg_parser()
+    args = parser.parse_args()
+    if args.list_presets:
+        _print_available_presets()
+        return
+
+    if args.model_name or args.pai_preset:
+        cfg = copy.deepcopy(default_config)
+        apply_runtime_overrides(
+            cfg,
+            model_name=args.model_name,
+            pai_preset=args.pai_preset,
+        )
+        train(cfg)
+    else:
+        train(default_config)
+
+
 if __name__ == '__main__':
-    train(default_config)
+    main()
