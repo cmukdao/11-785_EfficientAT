@@ -12,28 +12,38 @@ Usage:
     train(cfg)
 
     # or set a named PAI strategy on the root config (no separate factory call):
-    cfg = Config(pai_preset="c2na_plus_logit")   # every C2NA + classifier.5
+    cfg = Config(pai_preset="all_c2na_plus_logit")
     train(cfg)
 
-    cfg = Config(pai_preset="late_se_block")   # whole ConcurrentSEBlock on late stages
+    cfg = Config(pai_preset="late_se_blocks_only")
     train(cfg)
 
-    cfg = Config(pai_preset="classifier2_late_se_block")  # classifier.2 + whole late SE blocks
+    cfg = Config(pai_preset="prelogit_plus_late_se_blocks")
+    train(cfg)
+
+    cfg = Config(pai_preset="probe_c2na_stages_7_13")
+    train(cfg)
+
+    cfg = Config(pai_preset="probe_late_backbone_head")
     train(cfg)
 
     # or RESUME an existing run's pre-first-switch snapshot with a new
     # dendrite-phase schedule (keeps perforation layout, swaps switch_mode
     # / p_epochs_to_switch):
     cfg = Config(
-        pai_preset="head_late_se",
+        pai_preset="classifier_head_plus_late_se_linears",
         pai=PAIConfig(
             switch_mode="history",
             p_epochs_to_switch=8,   # new value -- drives next dendrite phase
-            resume_from_folder="pai/FSD50K-mn04_as-pai-head-late-se",
+            resume_from_folder=(
+                "pai/FSD50K-mn04_as-pai-fixed-classifier-head-plus-late-se-linears"
+            ),
             resume_checkpoint="beforeSwitch_0",   # default; omit to use it
             resume_force_neuron_mode=True,        # restart plateau clock fresh
         ),
-        experiment_name="FSD50K-mn04_as-pai-head-late-se-resume-p8",
+        experiment_name=(
+            "FSD50K-mn04_as-pai-fixed-classifier-head-plus-late-se-linears-resume-p8"
+        ),
     )
     train(cfg)
 
@@ -46,16 +56,49 @@ it yourself.
 from dataclasses import dataclass, field, replace
 from typing import Any, Dict, List, Optional, Tuple
 
-# --- PAI strategy presets (edit ``Config.pai_preset`` or ``config = Config(...)``) ---
+# PAI strategy presets; edit ``Config.pai_preset`` or instantiate ``Config(...)``.
 PAI_PRESET_DEFAULT = "default"
-PAI_PRESET_C2NA_PLUS_LOGIT = "c2na_plus_logit"
-PAI_PRESET_CLASSIFIER5_ONLY = "classifier5_only"
-PAI_PRESET_CLASSIFIER2_ONLY = "classifier2_only"
-PAI_PRESET_CLASSIFIERS_ONLY = "classifiers_only"
-PAI_PRESET_HEAD_LATE_SE = "head_late_se"
-PAI_PRESET_CLASSIFIER2_LATE_SE = "classifier2_late_se"
-PAI_PRESET_LATE_SE_BLOCK = "late_se_block"
-PAI_PRESET_CLASSIFIER2_LATE_SE_BLOCK = "classifier2_late_se_block"
+PAI_PRESET_ALL_C2NA_PLUS_LOGIT = "all_c2na_plus_logit"
+PAI_PRESET_LOGIT_ONLY = "logit_only"
+PAI_PRESET_PRELOGIT_ONLY = "prelogit_only"
+PAI_PRESET_CLASSIFIER_HEAD_ONLY = "classifier_head_only"
+PAI_PRESET_CLASSIFIER_HEAD_LATE_SE_LINEARS = "classifier_head_plus_late_se_linears"
+PAI_PRESET_PRELOGIT_LATE_SE_LINEARS = "prelogit_plus_late_se_linears"
+PAI_PRESET_LATE_SE_BLOCKS_ONLY = "late_se_blocks_only"
+PAI_PRESET_PRELOGIT_LATE_SE_BLOCKS = "prelogit_plus_late_se_blocks"
+PAI_PRESET_PROBE_C2NA_STAGES_7_13 = "probe_c2na_stages_7_13"
+PAI_PRESET_PROBE_LATE_BACKBONE_HEAD = "probe_late_backbone_head"
+
+# Legacy aliases remain valid for old notebooks/scripts.
+PAI_PRESET_C2NA_PLUS_LOGIT = PAI_PRESET_ALL_C2NA_PLUS_LOGIT
+PAI_PRESET_CLASSIFIER5_ONLY = PAI_PRESET_LOGIT_ONLY
+PAI_PRESET_CLASSIFIER2_ONLY = PAI_PRESET_PRELOGIT_ONLY
+PAI_PRESET_CLASSIFIERS_ONLY = PAI_PRESET_CLASSIFIER_HEAD_ONLY
+PAI_PRESET_HEAD_LATE_SE = PAI_PRESET_CLASSIFIER_HEAD_LATE_SE_LINEARS
+PAI_PRESET_CLASSIFIER2_LATE_SE = PAI_PRESET_PRELOGIT_LATE_SE_LINEARS
+PAI_PRESET_LATE_SE_BLOCK = PAI_PRESET_LATE_SE_BLOCKS_ONLY
+PAI_PRESET_CLASSIFIER2_LATE_SE_BLOCK = PAI_PRESET_PRELOGIT_LATE_SE_BLOCKS
+PAI_PRESET_FEATURES_7_13_C2NA = PAI_PRESET_PROBE_C2NA_STAGES_7_13
+PAI_PRESET_PROBE_BACKBONE_HEAD = PAI_PRESET_PROBE_LATE_BACKBONE_HEAD
+
+_PROBE_BACKBONE_HEAD_MODULE_IDS: Tuple[str, ...] = (
+    ".features.14.block.2",
+    ".features.14.block.3",
+    ".features.15.block.2",
+    ".features.15.block.3",
+    ".features.16",
+)
+
+_MID_LATE_SE_BLOCK2_TRACK_IDS: Tuple[str, ...] = tuple(
+    f".features.{b}.block.2" for b in (11, 12, 13)
+)
+
+_FEATURES_7_13_C2NA_MODULE_IDS: Tuple[str, ...] = (
+    ".features.7.block.1",
+    ".features.7.block.2",
+    ".features.13.block.1",
+    ".features.13.block.3",
+)
 
 _HEAD_LATE_SE_MODULE_IDS: Tuple[str, ...] = (
     ".classifier.2",
@@ -88,43 +131,61 @@ _EARLY_SE_BLOCK2_TRACK_IDS: Tuple[str, ...] = (
 )
 
 _PRESET_PAI_PATCHES: Dict[str, dict] = {
-    PAI_PRESET_C2NA_PLUS_LOGIT: {
+    PAI_PRESET_ALL_C2NA_PLUS_LOGIT: {
         "perforate_names_override": ("Conv2dNormActivation",),
         "perforate_module_ids": [".classifier.5"],
         "track_module_names": ("Linear",),
         "track_module_ids": (),
     },
-    PAI_PRESET_CLASSIFIER5_ONLY: {
+    PAI_PRESET_PROBE_C2NA_STAGES_7_13: {
+        "perforate_names_override": ("Conv2dNormActivation",),
+        "perforate_module_ids": list(_FEATURES_7_13_C2NA_MODULE_IDS),
+        "track_module_names": ("Linear",),
+        "track_module_ids": (),
+    },
+    PAI_PRESET_PROBE_LATE_BACKBONE_HEAD: {
+        # Whole ``.block.2`` SE modules by id; ``.block.3`` + ``features.16`` C2NA.
+        "perforate_names_override": ("Linear", "Conv2dNormActivation"),
+        "perforate_module_ids": list(_PROBE_BACKBONE_HEAD_MODULE_IDS),
+        "track_module_names": ("Linear",),
+        "track_module_ids": (
+            ".features.0",
+            ".in_c",
+            *_EARLY_SE_BLOCK2_TRACK_IDS,
+            *_MID_LATE_SE_BLOCK2_TRACK_IDS,
+        ),
+    },
+    PAI_PRESET_LOGIT_ONLY: {
         "perforate_names_override": ("Linear",),
         "perforate_module_ids": [".classifier.5"],
         "track_module_names": ("Linear",),
         "track_module_ids": (".features.0", ".in_c"),
     },
-    PAI_PRESET_CLASSIFIER2_ONLY: {
+    PAI_PRESET_PRELOGIT_ONLY: {
         "perforate_names_override": ("Linear",),
         "perforate_module_ids": [".classifier.2"],
         "track_module_names": ("Linear",),
         "track_module_ids": (".features.0", ".in_c"),
     },
-    PAI_PRESET_CLASSIFIERS_ONLY: {
+    PAI_PRESET_CLASSIFIER_HEAD_ONLY: {
         "perforate_names_override": ("Linear",),
         "perforate_module_ids": [".classifier.2", ".classifier.5"],
         "track_module_names": ("Linear",),
         "track_module_ids": (".features.0", ".in_c"),
     },
-    PAI_PRESET_HEAD_LATE_SE: {
+    PAI_PRESET_CLASSIFIER_HEAD_LATE_SE_LINEARS: {
         "perforate_names_override": ("Linear",),
         "perforate_module_ids": list(_HEAD_LATE_SE_MODULE_IDS),
         "track_module_names": ("Linear",),
         "track_module_ids": (".features.0", ".in_c"),
     },
-    PAI_PRESET_CLASSIFIER2_LATE_SE: {
+    PAI_PRESET_PRELOGIT_LATE_SE_LINEARS: {
         "perforate_names_override": ("Linear",),
         "perforate_module_ids": [".classifier.2", *list(_LATE_SE_ONLY_MODULE_IDS)],
         "track_module_names": ("Linear",),
         "track_module_ids": (".features.0", ".in_c"),
     },
-    PAI_PRESET_LATE_SE_BLOCK: {
+    PAI_PRESET_LATE_SE_BLOCKS_ONLY: {
         "perforate_names_override": ("Linear",),
         "perforate_module_ids": list(_LATE_CONCURRENT_SE_BLOCK_IDS),
         "track_module_names": ("Linear",),
@@ -134,7 +195,7 @@ _PRESET_PAI_PATCHES: Dict[str, dict] = {
             *_EARLY_SE_BLOCK2_TRACK_IDS,
         ),
     },
-    PAI_PRESET_CLASSIFIER2_LATE_SE_BLOCK: {
+    PAI_PRESET_PRELOGIT_LATE_SE_BLOCKS: {
         "perforate_names_override": ("Linear",),
         "perforate_module_ids": [
             ".classifier.2",
@@ -151,25 +212,46 @@ _PRESET_PAI_PATCHES: Dict[str, dict] = {
 
 # Wandb / save slug fragment when ``experiment_name`` is left empty.
 _PRESET_EXPERIMENT_SUFFIX: Dict[str, str] = {
-    PAI_PRESET_C2NA_PLUS_LOGIT: "c2na+logit",
-    PAI_PRESET_CLASSIFIER5_ONLY: "classifier5-only",
-    PAI_PRESET_CLASSIFIER2_ONLY: "classifier2-only",
-    PAI_PRESET_CLASSIFIERS_ONLY: "classifiers-only",
-    PAI_PRESET_HEAD_LATE_SE: "head-late-se",
-    PAI_PRESET_CLASSIFIER2_LATE_SE: "classifier2-late-se",
-    PAI_PRESET_LATE_SE_BLOCK: "late-se-block",
-    PAI_PRESET_CLASSIFIER2_LATE_SE_BLOCK: "classifier2-late-se-block",
+    PAI_PRESET_ALL_C2NA_PLUS_LOGIT: "all-c2na-plus-logit",
+    PAI_PRESET_PROBE_C2NA_STAGES_7_13: "probe-c2na-stages-7-13",
+    PAI_PRESET_PROBE_LATE_BACKBONE_HEAD: "probe-late-backbone-head",
+    PAI_PRESET_LOGIT_ONLY: "logit-only",
+    PAI_PRESET_PRELOGIT_ONLY: "prelogit-only",
+    PAI_PRESET_CLASSIFIER_HEAD_ONLY: "classifier-head-only",
+    PAI_PRESET_CLASSIFIER_HEAD_LATE_SE_LINEARS: "classifier-head-plus-late-se-linears",
+    PAI_PRESET_PRELOGIT_LATE_SE_LINEARS: "prelogit-plus-late-se-linears",
+    PAI_PRESET_LATE_SE_BLOCKS_ONLY: "late-se-blocks-only",
+    PAI_PRESET_PRELOGIT_LATE_SE_BLOCKS: "prelogit-plus-late-se-blocks",
 }
+
+_PRESET_ALIASES: Dict[str, str] = {
+    "c2na_plus_logit": PAI_PRESET_ALL_C2NA_PLUS_LOGIT,
+    "classifier5_only": PAI_PRESET_LOGIT_ONLY,
+    "classifier2_only": PAI_PRESET_PRELOGIT_ONLY,
+    "classifiers_only": PAI_PRESET_CLASSIFIER_HEAD_ONLY,
+    "head_late_se": PAI_PRESET_CLASSIFIER_HEAD_LATE_SE_LINEARS,
+    "classifier2_late_se": PAI_PRESET_PRELOGIT_LATE_SE_LINEARS,
+    "late_se_block": PAI_PRESET_LATE_SE_BLOCKS_ONLY,
+    "classifier2_late_se_block": PAI_PRESET_PRELOGIT_LATE_SE_BLOCKS,
+    "features_7_13_c2na": PAI_PRESET_PROBE_C2NA_STAGES_7_13,
+    "probe_backbone_head": PAI_PRESET_PROBE_LATE_BACKBONE_HEAD,
+}
+
+
+def _normalize_pai_preset(preset: str) -> str:
+    key = (preset or PAI_PRESET_DEFAULT).strip()
+    return _PRESET_ALIASES.get(key, key)
 
 
 def _apply_pai_preset(cfg: "Config") -> None:
     """Merge preset-specific ``PAIConfig`` fields onto ``cfg.pai``."""
-    key = (cfg.pai_preset or PAI_PRESET_DEFAULT).strip()
+    key = _normalize_pai_preset(cfg.pai_preset)
+    cfg.pai_preset = key
     if key == PAI_PRESET_DEFAULT:
         return
     patches = _PRESET_PAI_PATCHES.get(key)
     if patches is None:
-        choices = sorted({PAI_PRESET_DEFAULT, *_PRESET_PAI_PATCHES})
+        choices = sorted({PAI_PRESET_DEFAULT, *_PRESET_PAI_PATCHES, *_PRESET_ALIASES})
         raise ValueError(
             f"Unknown Config.pai_preset={key!r}. Valid choices: {choices}"
         )
@@ -210,6 +292,7 @@ class ModelConfig:
     head_type: str = "mlp"
     se_dims: str = "c"
     num_classes: int = 200
+
 
 @dataclass
 class DataConfig:
@@ -358,7 +441,7 @@ class PAIConfig:
     #       .conc_se_layers[i] SqueezeExcitation
     #         .fc1             Linear                                  [PERFORATED]
     #         .fc2             Linear                                  [PERFORATED]
-    #   Presets ``late_se_block`` / ``classifier2_late_se_block``: override
+    #   Presets ``late_se_blocks_only`` / ``prelogit_plus_late_se_blocks``: override
     #   ``("Linear",)`` only; list late ``.features.{11..15}.block.2`` in
     #   ``perforate_module_ids`` so PAI wraps those whole SE modules by id.
     #   Earlier SE stages (``.features.{4,5,6,10}.block.2`` on default MN conf)
@@ -524,6 +607,7 @@ class WandbConfig:
         "PerforatedAI",
     )
 
+
 @dataclass
 class Config:
     preprocess: PreprocessConfig = field(default_factory=PreprocessConfig)
@@ -532,9 +616,10 @@ class Config:
     optim: OptimConfig = field(default_factory=OptimConfig)
     pai: PAIConfig = field(default_factory=PAIConfig)
     wandb: WandbConfig = field(default_factory=WandbConfig)
-    # PAI layout preset: "default"eom ``_PRESET_PAI_PATCHES`` (e.g. ``c2na_plus_logit``).
-    pai_preset: str = PAI_PRESET_CLASSIFIER2_LATE_SE_BLOCK
+    # PAI layout preset: "default" or a key in ``_PRESET_PAI_PATCHES``.
+    pai_preset: str = PAI_PRESET_PROBE_LATE_BACKBONE_HEAD
     experiment_name: str = ""
+    seed: int = 0
     cuda: bool = True
 
     def __post_init__(self) -> None:
@@ -567,6 +652,6 @@ class Config:
 
 
 # Default instance consumed by the training script. Switch PAI layout here,
-# e.g. ``config = Config(pai_preset=PAI_PRESET_C2NA_PLUS_LOGIT)``, or mutate
+# e.g. ``config = Config(pai_preset=PAI_PRESET_ALL_C2NA_PLUS_LOGIT)``, or mutate
 # fields in-place after import.
 config = Config()
