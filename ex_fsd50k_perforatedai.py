@@ -45,7 +45,9 @@ PAI reference: https://www.perforatedai.com/docs
 import argparse
 import copy
 import os
+import shutil
 import sys
+import time
 
 from configs.fsd50k_pai_config import (
     Config,
@@ -95,6 +97,18 @@ except RuntimeError:
 
 from datasets.fsd50k import get_valid_set, get_training_set
 from helpers.init import make_generator, seed_everything, worker_init_fn
+from helpers.run_lifecycle import (
+    EXIT_PAI_RESTRUCTURED,
+    EXIT_WALL_TIME,
+    append_metrics_row,
+    create_run_dirs,
+    python_resume_command,
+    save_config,
+    save_training_checkpoint,
+    wall_time_exceeded,
+    write_complete_file,
+    write_resume_files,
+)
 from helpers.utils import NAME_TO_WIDTH, exp_warmup_linear_down, mixup
 from models.dymn.dy_block import DY_Block
 from models.dymn.model import get_model as get_dymn
@@ -705,13 +719,90 @@ def save_rolling_checkpoint(model, name, width, epoch, mAP):
     return name
 
 
+def save_pai_system_checkpoint(model, pai_save_dir: str, tag: str = "latest") -> None:
+    """Best-effort manual PAI save for phase boundaries.
+
+    PAI versions have had slightly different `save_system` signatures. The
+    existing resume path is authoritative, so try the common call shapes and
+    leave a clear warning if this install relies only on PAI's automatic saves.
+    """
+    save_fn = getattr(UPA, "save_system", None)
+    if save_fn is None:
+        print("[PAI save] UPA.save_system is unavailable; relying on PAI auto-saves.")
+        return
+    attempts = (
+        lambda: save_fn(model, pai_save_dir, tag, True),
+        lambda: save_fn(model, pai_save_dir, tag),
+        lambda: save_fn(model, tag, pai_save_dir),
+        lambda: save_fn(model, tag),
+    )
+    last_error = None
+    for attempt in attempts:
+        try:
+            attempt()
+            print(f"[PAI save] Wrote PAI system checkpoint '{tag}' in {pai_save_dir}.")
+            return
+        except TypeError as exc:
+            last_error = exc
+        except Exception as exc:
+            print(f"[PAI save] Warning: failed to save '{tag}': {exc}")
+            return
+    print(f"[PAI save] Warning: could not call UPA.save_system: {last_error}")
+
+
+def sync_perforated_outputs(cfg: Config, run_paths) -> None:
+    if not cfg.runtime.sync_pai_saves:
+        return
+    run_dir = run_paths["run"].resolve()
+    mirror_dir = run_paths["pai"] / "mirrored_pai_outputs"
+    mirror_dir.mkdir(parents=True, exist_ok=True)
+    possible_sources = [
+        os.path.join("pai", cfg.experiment_name),
+        f"{cfg.experiment_name}_graphs",
+        f"{cfg.experiment_name}_models",
+        "graphs",
+    ]
+    for source_name in possible_sources:
+        source = os.path.abspath(source_name)
+        source_path = os.path.realpath(source)
+        try:
+            source_obj = os.path.abspath(source_path)
+            source_path_obj = os.path.realpath(source_obj)
+            if not os.path.exists(source_path_obj):
+                continue
+            source_resolved = os.path.realpath(source_path_obj)
+            if str(source_resolved).startswith(str(run_dir)):
+                continue
+            dest = mirror_dir / os.path.basename(source_resolved)
+            if os.path.isdir(source_resolved):
+                shutil.copytree(source_resolved, dest, dirs_exist_ok=True)
+            else:
+                shutil.copy2(source_resolved, dest)
+        except Exception as exc:
+            print(f"[PAI sync] Warning: failed to mirror {source_name}: {exc}")
+
+
 # ----------------------------------------------------------------------------
 # Training
 # ----------------------------------------------------------------------------
 def train(cfg: Config = default_config):
     seed_everything(cfg.seed)
 
-    pai_save_dir = os.path.join("pai", cfg.experiment_name)
+    runtime = cfg.runtime
+    save_name = runtime.save_name or cfg.experiment_name
+    runtime.save_name = save_name
+    run_start_time = time.time()
+    run_paths = create_run_dirs(
+        save_name,
+        runtime.output_dir,
+        allow_overwrite=runtime.allow_overwrite,
+        resume_pai=runtime.resume_pai or bool(cfg.pai.resume_from_folder),
+    )
+    pai_save_dir = str(run_paths["pai_system"])
+    if runtime.resume_pai:
+        cfg.pai.resume_from_folder = pai_save_dir
+        cfg.pai.resume_checkpoint = runtime.pai_resume_tag
+    save_config(cfg, run_paths)
     os.makedirs(pai_save_dir, exist_ok=True)
     os.makedirs(os.path.join(pai_save_dir, "pai"), exist_ok=True)
 
@@ -879,6 +970,9 @@ def train(cfg: Config = default_config):
         if mAP > best_val_mAP:
             best_val_mAP = mAP
             best_val_epoch = epoch
+            improved = True
+        else:
+            improved = False
 
         # PAI prints node-improvement / switch diagnostics inside add_validation_score.
         # Raise verbosity only for this block, then restore the configured default.
@@ -914,8 +1008,76 @@ def train(cfg: Config = default_config):
             optimizer.param_groups[0]["lr"],
         )
         name = save_rolling_checkpoint(model, name, width, epoch, mAP)
+        save_training_checkpoint(
+            model,
+            optimizer,
+            None,
+            epoch,
+            best_val_mAP,
+            best_val_epoch,
+            schedule_epoch,
+            {
+                "train_mAP": train_mAP,
+                "train_ROC": train_ROC,
+                "mAP": mAP,
+                "ROC": ROC,
+                "val_loss": val_loss,
+            },
+            cfg,
+            run_paths,
+            "last.pt",
+            is_perforated=True,
+        )
+        if improved:
+            save_training_checkpoint(
+                model,
+                optimizer,
+                None,
+                epoch,
+                best_val_mAP,
+                best_val_epoch,
+                schedule_epoch,
+                {
+                    "train_mAP": train_mAP,
+                    "train_ROC": train_ROC,
+                    "mAP": mAP,
+                    "ROC": ROC,
+                    "val_loss": val_loss,
+                },
+                cfg,
+                run_paths,
+                "best.pt",
+                is_perforated=True,
+            )
+        append_metrics_row(
+            run_paths,
+            {
+                "epoch": epoch,
+                "train_loss": train_loss_epoch,
+                "train_mAP": train_mAP,
+                "train_ROC": train_ROC,
+                "learning_rate": optimizer.param_groups[0]["lr"],
+                "mAP": mAP,
+                "ROC": ROC,
+                "val_loss": val_loss,
+                "best_val_mAP": best_val_mAP,
+                "best_val_epoch": best_val_epoch,
+                "restructured": restructured,
+                "training_complete": training_complete,
+            },
+        )
 
         if training_complete:
+            save_pai_system_checkpoint(model, pai_save_dir, "latest")
+            sync_perforated_outputs(cfg, run_paths)
+            write_complete_file(
+                run_paths,
+                save_name,
+                best_val_mAP,
+                best_val_epoch,
+                is_perforated=True,
+                phase_index=runtime.phase_index,
+            )
             print(
                 f"PAI training complete at epoch {epoch}. "
                 f"Best validation mAP (this run): {best_val_mAP:.4f} "
@@ -924,6 +1086,33 @@ def train(cfg: Config = default_config):
             )
             break
         elif restructured:
+            save_pai_system_checkpoint(model, pai_save_dir, "latest")
+            sync_perforated_outputs(cfg, run_paths)
+            if runtime.exit_on_pai_restructure:
+                resume_command = python_resume_command(
+                    cfg,
+                    {
+                        "save_name": save_name,
+                        "output_dir": runtime.output_dir,
+                        "resume_pai": True,
+                        "pai_resume_tag": "latest",
+                        "exit_on_pai_restructure": True,
+                        "max_wall_minutes": runtime.max_wall_minutes,
+                        "sync_pai_saves": runtime.sync_pai_saves,
+                        "phase_index": runtime.phase_index + 1,
+                    },
+                )
+                write_resume_files(
+                    run_paths,
+                    save_name,
+                    "pai_restructured",
+                    EXIT_PAI_RESTRUCTURED,
+                    resume_command,
+                    is_perforated=True,
+                    phase_index=runtime.phase_index,
+                )
+                print("Exiting after PAI restructure.")
+                sys.exit(EXIT_PAI_RESTRUCTURED)
             # Topology changed: optimizer state is stale, rebuild with the
             # same scheduler family we configured at startup.
             optimizer, _, _ = setup_pai_optimizer(model, cfg, register_with_tracker=False)
@@ -933,6 +1122,34 @@ def train(cfg: Config = default_config):
             # careful warm start the initial neuron cycle did.
             if lr_lambda is not None and oc.lambda_warmup_per_cycle:
                 schedule_epoch = 0
+
+        if wall_time_exceeded(runtime.max_wall_minutes, run_start_time):
+            save_pai_system_checkpoint(model, pai_save_dir, "latest")
+            sync_perforated_outputs(cfg, run_paths)
+            resume_command = python_resume_command(
+                cfg,
+                {
+                    "save_name": save_name,
+                    "output_dir": runtime.output_dir,
+                    "resume_pai": True,
+                    "pai_resume_tag": "latest",
+                    "exit_on_pai_restructure": runtime.exit_on_pai_restructure,
+                    "max_wall_minutes": runtime.max_wall_minutes,
+                    "sync_pai_saves": runtime.sync_pai_saves,
+                    "phase_index": runtime.phase_index + 1,
+                },
+            )
+            write_resume_files(
+                run_paths,
+                save_name,
+                "wall_time_budget",
+                EXIT_WALL_TIME,
+                resume_command,
+                is_perforated=True,
+                phase_index=runtime.phase_index,
+            )
+            print("Exiting after wall-time budget.")
+            sys.exit(EXIT_WALL_TIME)
 
 
 # ----------------------------------------------------------------------------
@@ -1023,6 +1240,15 @@ def build_arg_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="Print canonical PAI presets and legacy aliases, then exit.",
     )
+    parser.add_argument("--save-name", default=None)
+    parser.add_argument("--output-dir", default="runs")
+    parser.add_argument("--resume-pai", action="store_true")
+    parser.add_argument("--pai-resume-tag", default="latest")
+    parser.add_argument("--exit-on-pai-restructure", action="store_true")
+    parser.add_argument("--max-wall-minutes", type=float, default=None)
+    parser.add_argument("--sync-pai-saves", action="store_true")
+    parser.add_argument("--phase-index", type=int, default=0)
+    parser.add_argument("--allow-overwrite", action="store_true")
     return parser
 
 
@@ -1033,16 +1259,22 @@ def main() -> None:
         _print_available_presets()
         return
 
-    if args.model_name or args.pai_preset:
-        cfg = copy.deepcopy(default_config)
-        apply_runtime_overrides(
-            cfg,
-            model_name=args.model_name,
-            pai_preset=args.pai_preset,
-        )
-        train(cfg)
-    else:
-        train(default_config)
+    cfg = copy.deepcopy(default_config)
+    apply_runtime_overrides(
+        cfg,
+        model_name=args.model_name,
+        pai_preset=args.pai_preset,
+        save_name=args.save_name,
+        output_dir=args.output_dir,
+        resume_pai=args.resume_pai,
+        pai_resume_tag=args.pai_resume_tag,
+        exit_on_pai_restructure=args.exit_on_pai_restructure,
+        max_wall_minutes=args.max_wall_minutes,
+        sync_pai_saves=args.sync_pai_saves,
+        phase_index=args.phase_index,
+        allow_overwrite=args.allow_overwrite,
+    )
+    train(cfg)
 
 
 if __name__ == '__main__':

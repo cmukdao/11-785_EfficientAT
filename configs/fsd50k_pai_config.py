@@ -303,6 +303,15 @@ def apply_runtime_overrides(
     cfg: "Config",
     model_name: Optional[str] = None,
     pai_preset: Optional[str] = None,
+    save_name: Optional[str] = None,
+    output_dir: Optional[str] = None,
+    resume_pai: bool = False,
+    pai_resume_tag: Optional[str] = None,
+    exit_on_pai_restructure: Optional[bool] = None,
+    max_wall_minutes: Optional[float] = None,
+    sync_pai_saves: Optional[bool] = None,
+    phase_index: Optional[int] = None,
+    allow_overwrite: Optional[bool] = None,
 ) -> "Config":
     """Apply CLI overrides on top of a config object and refresh run names."""
     if model_name:
@@ -322,6 +331,28 @@ def apply_runtime_overrides(
 
     if model_name or pai_preset:
         _derive_run_identity(cfg, force=True)
+
+    if save_name:
+        cfg.runtime.save_name = save_name
+        cfg.experiment_name = save_name
+        cfg.wandb.name = save_name
+        cfg.wandb.group = save_name
+    if output_dir is not None:
+        cfg.runtime.output_dir = output_dir
+    if resume_pai:
+        cfg.runtime.resume_pai = True
+    if pai_resume_tag is not None:
+        cfg.runtime.pai_resume_tag = pai_resume_tag
+    if exit_on_pai_restructure is not None:
+        cfg.runtime.exit_on_pai_restructure = exit_on_pai_restructure
+    if max_wall_minutes is not None:
+        cfg.runtime.max_wall_minutes = max_wall_minutes
+    if sync_pai_saves is not None:
+        cfg.runtime.sync_pai_saves = sync_pai_saves
+    if phase_index is not None:
+        cfg.runtime.phase_index = phase_index
+    if allow_overwrite is not None:
+        cfg.runtime.allow_overwrite = allow_overwrite
 
     return cfg
 
@@ -677,6 +708,19 @@ class WandbConfig:
 
 
 @dataclass
+class RuntimeConfig:
+    save_name: Optional[str] = None
+    output_dir: str = "runs"
+    resume_pai: bool = False
+    pai_resume_tag: str = "latest"
+    exit_on_pai_restructure: bool = False
+    max_wall_minutes: Optional[float] = None
+    sync_pai_saves: bool = False
+    phase_index: int = 0
+    allow_overwrite: bool = False
+
+
+@dataclass
 class Config:
     preprocess: PreprocessConfig = field(default_factory=PreprocessConfig)
     model: ModelConfig = field(default_factory=ModelConfig)
@@ -684,6 +728,7 @@ class Config:
     optim: OptimConfig = field(default_factory=OptimConfig)
     pai: PAIConfig = field(default_factory=PAIConfig)
     wandb: WandbConfig = field(default_factory=WandbConfig)
+    runtime: RuntimeConfig = field(default_factory=RuntimeConfig)
     # PAI layout preset: "default" or a key in ``_PRESET_PAI_PATCHES``.
     pai_preset: str = PAI_PRESET_PROBE_LATE_BACKBONE_HEAD
     experiment_name: str = ""

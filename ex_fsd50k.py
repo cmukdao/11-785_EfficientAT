@@ -1,5 +1,7 @@
 import argparse
 import os
+import sys
+import time
 
 import numpy as np
 import torch
@@ -11,6 +13,18 @@ from tqdm import tqdm
 
 from datasets.fsd50k import get_eval_set, get_valid_set, get_training_set
 from helpers.init import make_generator, seed_everything, worker_init_fn
+from helpers.run_lifecycle import (
+    EXIT_WALL_TIME,
+    append_metrics_row,
+    create_run_dirs,
+    load_training_checkpoint,
+    python_resume_command,
+    save_args_config,
+    save_training_checkpoint,
+    wall_time_exceeded,
+    write_complete_file,
+    write_resume_files,
+)
 from helpers.utils import NAME_TO_WIDTH, exp_warmup_linear_down, mixup
 from models.dymn.model import get_model as get_dymn
 from models.mn.model import get_model as get_mobilenet
@@ -130,6 +144,17 @@ def save_checkpoint_if_best(model, improved):
 def train(args):
     seed_everything(args.seed)
 
+    if not args.save_name:
+        args.save_name = args.experiment_name
+    run_start_time = time.time()
+    run_paths = create_run_dirs(
+        args.save_name,
+        args.output_dir,
+        allow_overwrite=args.allow_overwrite,
+        resume=bool(args.resume),
+    )
+    save_args_config(args, run_paths)
+
     wandb.init(
         entity="11-785_perforated_ai",
         project="FSD50K",
@@ -185,7 +210,27 @@ def train(args):
     max_epochs = args.n_epochs if args.n_epochs and args.n_epochs > 0 else int(1e9)
     schedule_epoch = 0  # drives lambda_warmup when lambda_warmup_per_cycle is True
 
-    epoch = 0
+    start_epoch = 0
+    if args.resume:
+        checkpoint = load_training_checkpoint(
+            model,
+            optimizer,
+            scheduler,
+            args.resume,
+            device,
+        )
+        start_epoch = int(checkpoint["epoch"]) + 1
+        best_mAP = checkpoint.get("best_metric", best_mAP)
+        best_epoch = checkpoint.get("best_epoch", best_epoch)
+        schedule_epoch = checkpoint.get("schedule_epoch", schedule_epoch)
+        extra_state = checkpoint.get("extra_state", {})
+        epochs_since_improvement = extra_state.get(
+            "epochs_since_improvement",
+            epochs_since_improvement,
+        )
+        print(f"Resumed baseline checkpoint from {args.resume} at epoch {start_epoch}.")
+
+    epoch = start_epoch
     while epoch < max_epochs:
         # Manual LR for lambda_warmup (epoch-start, same order as perforated script).
         if lr_lambda is not None:
@@ -268,6 +313,73 @@ def train(args):
             val_loss,
         )
         save_checkpoint_if_best(model, improved)
+        extra_state = {
+            "epochs_since_improvement": epochs_since_improvement,
+        }
+        save_training_checkpoint(
+            model,
+            optimizer,
+            scheduler,
+            epoch,
+            best_mAP,
+            best_epoch,
+            schedule_epoch,
+            extra_state,
+            args,
+            run_paths,
+            "last.pt",
+            is_perforated=False,
+        )
+        if improved:
+            save_training_checkpoint(
+                model,
+                optimizer,
+                scheduler,
+                epoch,
+                best_mAP,
+                best_epoch,
+                schedule_epoch,
+                extra_state,
+                args,
+                run_paths,
+                "best.pt",
+                is_perforated=False,
+            )
+        append_metrics_row(
+            run_paths,
+            {
+                "epoch": epoch,
+                "train_loss": float(np.mean(train_stats["train_loss"])),
+                "train_mAP": train_mAP,
+                "train_ROC": train_ROC,
+                "learning_rate": lr_now,
+                "mAP": mAP,
+                "ROC": ROC,
+                "val_loss": val_loss,
+                "best_mAP": best_mAP,
+                "best_epoch": best_epoch,
+            },
+        )
+
+        if wall_time_exceeded(args.max_wall_minutes, run_start_time):
+            resume_command = python_resume_command(
+                args,
+                {
+                    "save_name": args.save_name,
+                    "output_dir": args.output_dir,
+                    "resume": str(run_paths["checkpoints"] / "last.pt"),
+                },
+            )
+            write_resume_files(
+                run_paths,
+                args.save_name,
+                "wall_time_budget",
+                EXIT_WALL_TIME,
+                resume_command,
+                is_perforated=False,
+            )
+            print("Exiting after wall-time budget.")
+            sys.exit(EXIT_WALL_TIME)
 
         # Early-stopping: only after min_epochs; metric = validation mAP.
         if (
@@ -290,6 +402,13 @@ def train(args):
     # ``max_epochs``; after early stopping it is the last completed 0-based index.
     wandb.run.summary["stopped_epoch"] = (
         epoch if epoch >= max_epochs else epoch + 1
+    )
+    write_complete_file(
+        run_paths,
+        args.save_name,
+        best_mAP,
+        best_epoch,
+        is_perforated=False,
     )
 
 
@@ -388,6 +507,11 @@ if __name__ == '__main__':
 
     # general
     parser.add_argument('--experiment_name', type=str, default="FSD50K-mn05_as-baseline")
+    parser.add_argument('--save-name', type=str, default=None)
+    parser.add_argument('--output-dir', type=str, default="runs")
+    parser.add_argument('--resume', type=str, default=None)
+    parser.add_argument('--max-wall-minutes', type=float, default=None)
+    parser.add_argument('--allow-overwrite', action='store_true', default=False)
     parser.add_argument('--train', action='store_true', default=False)
     parser.add_argument('--cuda', action='store_true', default=False)
     parser.add_argument('--batch_size', type=int, default=64)
