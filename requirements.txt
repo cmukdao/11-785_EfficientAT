@@ -1,4 +1,4 @@
-av
+# conda install -c conda-forge "ffmpeg<4.4" av -y
 h5py
 librosa
 numpy
