@@ -13,8 +13,10 @@ cd "$PROJECT_ROOT"
 mkdir -p "$PROJECT_ROOT/logs"
 mkdir -p "$RUN_ROOT"
 
+set +u
 source ~/.bashrc
 conda activate efficientat
+set -u
 
 echo "Smoke test ran on $(date)" > "$RUN_ROOT/smoke_bridge2_fsd50k.txt"
 

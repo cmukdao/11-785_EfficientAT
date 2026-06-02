@@ -28,8 +28,10 @@ cd "$PROJECT_ROOT"
 mkdir -p "$PROJECT_ROOT/logs"
 mkdir -p "$RUN_ROOT"
 
+set +u
 source ~/.bashrc
 conda activate efficientat
+set -u
 
 RESUME_ARGS=()
 if [ "$PHASE" -gt 0 ]; then
