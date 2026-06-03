@@ -48,6 +48,7 @@ import os
 import shutil
 import sys
 import time
+from contextlib import contextmanager
 
 from configs.fsd50k_pai_config import (
     Config,
@@ -122,6 +123,22 @@ import perforatedbp
 
 TRAIN_GENERATOR_OFFSET = 0
 VAL_GENERATOR_OFFSET = 1
+
+
+@contextmanager
+def pai_working_directory(run_dir):
+    """Run PAI filesystem operations from the canonical run directory.
+
+    PAI treats `save_name` as a run-name/path fragment rather than a plain
+    output directory. Keeping cwd at the run root and passing `pai/system`
+    prevents PAI from appending absolute paths back under its own save folder.
+    """
+    previous_cwd = os.getcwd()
+    os.chdir(run_dir)
+    try:
+        yield
+    finally:
+        os.chdir(previous_cwd)
 
 
 # ----------------------------------------------------------------------------
@@ -596,11 +613,11 @@ def build_model(cfg: Config):
     return model, width
 
 
-def initialize_pai_model(model, cfg: Config, pai_save_dir: str):
-    configure_pai(cfg, save_name=pai_save_dir)
+def initialize_pai_model(model, cfg: Config, pai_save_name: str):
+    configure_pai(cfg, save_name=pai_save_name)
     model = _perforate_model(
         model,
-        save_name=pai_save_dir,
+        save_name=pai_save_name,
         maximizing_score=True,  # mAP is higher-is-better.
     )
     model = _maybe_resume_from_checkpoint(model, cfg)
@@ -799,8 +816,9 @@ def train(cfg: Config = default_config):
         resume_pai=runtime.resume_pai or bool(cfg.pai.resume_from_folder),
     )
     pai_save_dir = str(run_paths["pai_system"])
+    pai_save_name = os.path.join("pai", "system")
     if runtime.resume_pai:
-        cfg.pai.resume_from_folder = pai_save_dir
+        cfg.pai.resume_from_folder = pai_save_name
         cfg.pai.resume_checkpoint = runtime.pai_resume_tag
     save_config(cfg, run_paths)
     os.makedirs(pai_save_dir, exist_ok=True)
@@ -824,7 +842,8 @@ def train(cfg: Config = default_config):
 
     mel = build_mel(cfg, device)
     model, width = build_model(cfg)
-    model = initialize_pai_model(model, cfg, pai_save_dir)
+    with pai_working_directory(run_paths["run"]):
+        model = initialize_pai_model(model, cfg, pai_save_name)
 
     # Optional full post-perforation module tree: lets the user visually
     # confirm which blocks became `PAINeuronModule` / `TrackedNeuronModule`
@@ -979,9 +998,10 @@ def train(cfg: Config = default_config):
         GPA.pc.set_verbose(cfg.pai.verbose)
         try:
             # PAI drives switching + "training_complete" off validation mAP.
-            model, restructured, training_complete = GPA.pai_tracker.add_validation_score(
-                mAP, model
-            )
+            with pai_working_directory(run_paths["run"]):
+                model, restructured, training_complete = GPA.pai_tracker.add_validation_score(
+                    mAP, model
+                )
         finally:
             GPA.pc.set_verbose(False)
         model.to(device)
@@ -1068,7 +1088,8 @@ def train(cfg: Config = default_config):
         )
 
         if training_complete:
-            save_pai_system_checkpoint(model, pai_save_dir, "latest")
+            with pai_working_directory(run_paths["run"]):
+                save_pai_system_checkpoint(model, pai_save_name, "latest")
             sync_perforated_outputs(cfg, run_paths)
             write_complete_file(
                 run_paths,
@@ -1086,7 +1107,8 @@ def train(cfg: Config = default_config):
             )
             break
         elif restructured:
-            save_pai_system_checkpoint(model, pai_save_dir, "latest")
+            with pai_working_directory(run_paths["run"]):
+                save_pai_system_checkpoint(model, pai_save_name, "latest")
             sync_perforated_outputs(cfg, run_paths)
             if runtime.exit_on_pai_restructure:
                 resume_command = python_resume_command(
@@ -1124,7 +1146,8 @@ def train(cfg: Config = default_config):
                 schedule_epoch = 0
 
         if wall_time_exceeded(runtime.max_wall_minutes, run_start_time):
-            save_pai_system_checkpoint(model, pai_save_dir, "latest")
+            with pai_working_directory(run_paths["run"]):
+                save_pai_system_checkpoint(model, pai_save_name, "latest")
             sync_perforated_outputs(cfg, run_paths)
             resume_command = python_resume_command(
                 cfg,

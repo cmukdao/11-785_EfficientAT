@@ -1,6 +1,6 @@
 [
     {
-      "save_name": "FSD50K-mn04-pai-probe-late-s0",
+      "save_name": "FSD50K-mn04-logit-only-seeded",
       "type": "pai",
       "args": [
         "--model", "mn04_as",
