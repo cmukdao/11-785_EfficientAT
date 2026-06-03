@@ -276,6 +276,24 @@ def _select_pai_blocks_for_model(model_name: str):
     )
 
 
+def _set_pai_config_list(field_name: str, values) -> None:
+    """Set a PAI config list exactly, falling back to append on old APIs."""
+    setter = getattr(GPA.pc, f"set_{field_name}", None)
+    if callable(setter):
+        setter(list(values))
+        return
+    getter = getattr(GPA.pc, f"get_{field_name}", None)
+    if callable(getter):
+        current = getter()
+        if isinstance(current, list):
+            current.clear()
+            current.extend(values)
+            return
+    appender = getattr(GPA.pc, f"append_{field_name}", None)
+    if callable(appender):
+        appender(list(values))
+
+
 # ----------------------------------------------------------------------------
 # PAI configuration
 # ----------------------------------------------------------------------------
@@ -350,23 +368,19 @@ def _configure_pai(cfg: Config, save_name: str) -> None:
 
     # Optional: restrict conversion to specific dotted module ids only.
     # When set, PAI only perforates these exact ids.
-    if pai.perforate_module_ids:
-        GPA.pc.append_module_ids_to_perforate(list(pai.perforate_module_ids))
+    _set_pai_config_list("module_ids_to_perforate", pai.perforate_module_ids or [])
 
     # Skip specific dotted module ids (stem etc.) -- tracked means
     # "don't add dendrites here, but do keep gradients flowing through".
-    if pai.track_module_ids:
-        GPA.pc.append_module_ids_to_track(list(pai.track_module_ids))
+    _set_pai_config_list("module_ids_to_track", pai.track_module_ids or [])
 
     # Track-only classes: PAI wraps these as `TrackedNeuronModule` (no
     # dendrites added, and the walker STOPS at them so the inner layers are
     # never flagged as "unwrapped norm"). We register both by class object
     # and short name for robustness against duplicate imports.
-    if track_classes:
-        GPA.pc.append_modules_to_track(track_classes)
+    _set_pai_config_list("modules_to_track", track_classes)
     all_track_names = list(track_names) + list(pai.track_module_names)
-    if all_track_names:
-        GPA.pc.append_module_names_to_track(all_track_names)
+    _set_pai_config_list("module_names_to_track", all_track_names)
 
     # Per-class processors for modules whose forward takes >1 tensor or
     # returns >1 tensor (customization.md section 2.2). DY_Block is the only
@@ -1003,9 +1017,11 @@ def train(cfg: Config = default_config):
                     mAP, model
                 )
         finally:
-            GPA.pc.set_verbose(False)
+            GPA.pc.set_verbose(cfg.pai.verbose)
         model.to(device)
         mv = GPA.pai_tracker.member_vars
+        pai_mode = mv.get("mode")
+        num_dendrites_added = mv.get("num_dendrites_added")
         if mv.get("mode") == "p":
             consecutive_epochs_in_p += 1
         else:
@@ -1082,6 +1098,8 @@ def train(cfg: Config = default_config):
                 "val_loss": val_loss,
                 "best_val_mAP": best_val_mAP,
                 "best_val_epoch": best_val_epoch,
+                "pai_mode": pai_mode,
+                "num_dendrites_added": num_dendrites_added,
                 "restructured": restructured,
                 "training_complete": training_complete,
             },
